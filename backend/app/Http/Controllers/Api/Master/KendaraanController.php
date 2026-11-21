@@ -3,47 +3,30 @@
 namespace App\Http\Controllers\Api\Master;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Master\KendaraanRequest;
 use App\Models\Kendaraan;
 use App\Models\LogAktivitas;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class KendaraanController extends Controller
 {
     public function index()
     {
-        $kendaraan = Kendaraan::with('user')->orderByDesc('id_kendaraan')->get();
-
         return response()->json([
             'success' => true,
-            'data' => $kendaraan,
+            'data' => Kendaraan::with('user')->orderByDesc('id_kendaraan')->get(),
         ], 200);
     }
 
-    public function store(Request $request)
+    public function store(KendaraanRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'plat_nomor' => 'required|string|max:20',
-            'jenis_kendaraan' => 'required|string|max:50',
-            'warna' => 'nullable|string|max:30',
-            'pemilik' => 'nullable|string|max:100',
-            'id_user' => 'nullable|exists:tb_user,id_user',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
+        $validated = $request->validated();
 
         $kendaraan = Kendaraan::create([
-            'plat_nomor' => strtoupper(trim($request->plat_nomor)),
-            'jenis_kendaraan' => strtolower($request->jenis_kendaraan),
-            'warna' => $request->warna,
-            'pemilik' => $request->pemilik,
-            'id_user' => $request->id_user ?? auth('api')->id(),
+            'plat_nomor' => strtoupper(trim($validated['plat_nomor'])),
+            'jenis_kendaraan' => strtolower(trim($validated['jenis_kendaraan'])),
+            'warna' => $validated['warna'] ?? null,
+            'pemilik' => $validated['pemilik'] ?? null,
+            'id_user' => $validated['id_user'] ?? auth('api')->id(),
         ]);
 
         LogAktivitas::create([
@@ -76,7 +59,7 @@ class KendaraanController extends Controller
         ], 200);
     }
 
-    public function update(Request $request, string $id)
+    public function update(KendaraanRequest $request, string $id)
     {
         $kendaraan = Kendaraan::find($id);
 
@@ -87,28 +70,18 @@ class KendaraanController extends Controller
             ], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'plat_nomor' => 'sometimes|required|string|max:20',
-            'jenis_kendaraan' => 'sometimes|required|string|max:50',
-            'warna' => 'nullable|string|max:30',
-            'pemilik' => 'nullable|string|max:100',
-            'id_user' => 'nullable|exists:tb_user,id_user',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
+        $validated = $request->validated();
 
         $kendaraan->update([
-            'plat_nomor' => $request->has('plat_nomor') ? strtoupper(trim($request->plat_nomor)) : $kendaraan->plat_nomor,
-            'jenis_kendaraan' => $request->has('jenis_kendaraan') ? strtolower($request->jenis_kendaraan) : $kendaraan->jenis_kendaraan,
-            'warna' => $request->has('warna') ? $request->warna : $kendaraan->warna,
-            'pemilik' => $request->has('pemilik') ? $request->pemilik : $kendaraan->pemilik,
-            'id_user' => $request->has('id_user') ? $request->id_user : $kendaraan->id_user,
+            'plat_nomor' => array_key_exists('plat_nomor', $validated)
+                ? strtoupper(trim($validated['plat_nomor']))
+                : $kendaraan->plat_nomor,
+            'jenis_kendaraan' => array_key_exists('jenis_kendaraan', $validated)
+                ? strtolower(trim($validated['jenis_kendaraan']))
+                : $kendaraan->jenis_kendaraan,
+            'warna' => array_key_exists('warna', $validated) ? $validated['warna'] : $kendaraan->warna,
+            'pemilik' => array_key_exists('pemilik', $validated) ? $validated['pemilik'] : $kendaraan->pemilik,
+            'id_user' => array_key_exists('id_user', $validated) ? $validated['id_user'] : $kendaraan->id_user,
         ]);
 
         LogAktivitas::create([

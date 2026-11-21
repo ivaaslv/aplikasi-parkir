@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Transaksi\TransaksiKeluarRequest;
+use App\Http\Requests\Transaksi\TransaksiMasukRequest;
 use App\Models\AreaParkir;
 use App\Models\Kendaraan;
 use App\Models\LogAktivitas;
@@ -10,7 +12,6 @@ use App\Models\Tarif;
 use App\Models\Transaksi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
 
 class TransaksiController extends Controller
 {
@@ -36,26 +37,12 @@ class TransaksiController extends Controller
         ], 200);
     }
 
-    public function masuk(Request $request)
+    public function masuk(TransaksiMasukRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'plat_nomor' => 'required|string|max:20',
-            'jenis_kendaraan' => 'required|string|max:50',
-            'warna' => 'nullable|string|max:30',
-            'pemilik' => 'nullable|string|max:100',
-            'id_area' => 'required|exists:tb_area_parkir,id_area',
-        ]);
+        $validated = $request->validated();
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $plat = strtoupper(trim($request->plat_nomor));
-        $jenis = strtolower(trim($request->jenis_kendaraan));
+        $plat = strtoupper(trim($validated['plat_nomor']));
+        $jenis = strtolower(trim($validated['jenis_kendaraan']));
 
         $tarif = Tarif::whereRaw('LOWER(jenis_kendaraan) = ?', [$jenis])->first();
         if (! $tarif) {
@@ -66,8 +53,8 @@ class TransaksiController extends Controller
         }
 
         try {
-            $transaksi = DB::transaction(function () use ($request, $plat, $jenis, $tarif) {
-                $area = AreaParkir::where('id_area', $request->id_area)->lockForUpdate()->first();
+            $transaksi = DB::transaction(function () use ($validated, $plat, $jenis, $tarif) {
+                $area = AreaParkir::where('id_area', $validated['id_area'])->lockForUpdate()->first();
 
                 if ((int) $area->terisi >= (int) $area->kapasitas) {
                     throw new \RuntimeException('Kapasitas area parkir sudah penuh');
@@ -77,17 +64,20 @@ class TransaksiController extends Controller
                     ['plat_nomor' => $plat],
                     [
                         'jenis_kendaraan' => $jenis,
-                        'warna' => $request->warna,
-                        'pemilik' => $request->pemilik,
+                        'warna' => $validated['warna'] ?? null,
+                        'pemilik' => $validated['pemilik'] ?? null,
                         'id_user' => auth('api')->id(),
                     ]
                 );
 
-                // Update info kendaraan jika dikirim dan berubah
                 $kendaraan->update([
                     'jenis_kendaraan' => $jenis,
-                    'warna' => $request->filled('warna') ? $request->warna : $kendaraan->warna,
-                    'pemilik' => $request->filled('pemilik') ? $request->pemilik : $kendaraan->pemilik,
+                    'warna' => array_key_exists('warna', $validated) && $validated['warna'] !== null
+                        ? $validated['warna']
+                        : $kendaraan->warna,
+                    'pemilik' => array_key_exists('pemilik', $validated) && $validated['pemilik'] !== null
+                        ? $validated['pemilik']
+                        : $kendaraan->pemilik,
                 ]);
 
                 $sudahMasuk = Transaksi::where('id_kendaraan', $kendaraan->id_kendaraan)
@@ -134,29 +124,19 @@ class TransaksiController extends Controller
         }
     }
 
-    public function keluar(Request $request)
+    public function keluar(TransaksiKeluarRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'id_parkir' => 'nullable|exists:tb_transaksi,id_parkir',
-            'plat_nomor' => 'nullable|string|max:20',
-        ]);
-
-        if ($validator->fails() || (! $request->filled('id_parkir') && ! $request->filled('plat_nomor'))) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Sertakan id_parkir atau plat_nomor kendaraan yang keluar',
-            ], 422);
-        }
+        $validated = $request->validated();
 
         try {
-            $transaksi = DB::transaction(function () use ($request) {
+            $transaksi = DB::transaction(function () use ($validated) {
                 $query = Transaksi::with(['kendaraan', 'tarif', 'areaParkir'])
                     ->where('status', 'masuk');
 
-                if ($request->filled('id_parkir')) {
-                    $query->where('id_parkir', $request->id_parkir);
+                if (! empty($validated['id_parkir'])) {
+                    $query->where('id_parkir', $validated['id_parkir']);
                 } else {
-                    $plat = strtoupper(trim($request->plat_nomor));
+                    $plat = strtoupper(trim($validated['plat_nomor']));
                     $query->whereHas('kendaraan', function ($q) use ($plat) {
                         $q->where('plat_nomor', $plat);
                     });

@@ -11,6 +11,7 @@ class LogAktivitasController extends Controller
 {
     public function index(Request $request)
     {
+
         $query = LogAktivitas::with('user')
             ->orderByDesc('waktu_aktivitas')
             ->orderByDesc('id_log');

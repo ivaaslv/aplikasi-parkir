@@ -3,50 +3,34 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Laporan\LaporanPendapatanRequest;
 use App\Models\Transaksi;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class LaporanController extends Controller
 {
-    public function pendapatan(Request $request)
+    public function pendapatan(LaporanPendapatanRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'tanggal_mulai' => 'nullable|date',
-            'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
-            'jenis_kendaraan' => 'nullable|string|max:50',
-            'id_area' => 'nullable|exists:tb_area_parkir,id_area',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi filter laporan gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
+        $validated = $request->validated();
 
         $query = Transaksi::with(['kendaraan', 'tarif', 'areaParkir', 'user'])
             ->where('status', 'keluar')
             ->whereNotNull('waktu_keluar');
 
-        if ($request->filled('tanggal_mulai')) {
-            $start = Carbon::parse($request->tanggal_mulai)->startOfDay();
-            $query->where('waktu_keluar', '>=', $start);
+        if (! empty($validated['tanggal_mulai'])) {
+            $query->where('waktu_keluar', '>=', Carbon::parse($validated['tanggal_mulai'])->startOfDay());
         }
 
-        if ($request->filled('tanggal_selesai')) {
-            $end = Carbon::parse($request->tanggal_selesai)->endOfDay();
-            $query->where('waktu_keluar', '<=', $end);
+        if (! empty($validated['tanggal_selesai'])) {
+            $query->where('waktu_keluar', '<=', Carbon::parse($validated['tanggal_selesai'])->endOfDay());
         }
 
-        if ($request->filled('id_area')) {
-            $query->where('id_area', $request->id_area);
+        if (! empty($validated['id_area'])) {
+            $query->where('id_area', $validated['id_area']);
         }
 
-        if ($request->filled('jenis_kendaraan')) {
-            $jenis = strtolower(trim($request->jenis_kendaraan));
+        if (! empty($validated['jenis_kendaraan'])) {
+            $jenis = strtolower(trim($validated['jenis_kendaraan']));
             $query->whereHas('kendaraan', function ($q) use ($jenis) {
                 $q->whereRaw('LOWER(jenis_kendaraan) = ?', [$jenis]);
             });
@@ -59,39 +43,31 @@ class LaporanController extends Controller
         $totalDurasiJam = (int) $transaksiKeluar->sum('durasi_jam');
 
         $perJenisKendaraan = $transaksiKeluar
-            ->groupBy(function ($item) {
-                return strtolower($item->kendaraan->jenis_kendaraan ?? 'tidak diketahui');
-            })
-            ->map(function ($group, $jenis) {
-                return [
-                    'jenis_kendaraan' => $jenis,
-                    'jumlah_transaksi' => $group->count(),
-                    'total_durasi_jam' => (int) $group->sum('durasi_jam'),
-                    'total_pendapatan' => (float) $group->sum('biaya_total'),
-                ];
-            })
+            ->groupBy(fn ($item) => strtolower($item->kendaraan->jenis_kendaraan ?? 'tidak diketahui'))
+            ->map(fn ($group, $jenis) => [
+                'jenis_kendaraan' => $jenis,
+                'jumlah_transaksi' => $group->count(),
+                'total_durasi_jam' => (int) $group->sum('durasi_jam'),
+                'total_pendapatan' => (float) $group->sum('biaya_total'),
+            ])
             ->values();
 
         $perArea = $transaksiKeluar
-            ->groupBy(function ($item) {
-                return $item->areaParkir->nama_area ?? 'Area Tidak Diketahui';
-            })
-            ->map(function ($group, $namaArea) {
-                return [
-                    'nama_area' => $namaArea,
-                    'jumlah_transaksi' => $group->count(),
-                    'total_pendapatan' => (float) $group->sum('biaya_total'),
-                ];
-            })
+            ->groupBy(fn ($item) => $item->areaParkir->nama_area ?? 'Area Tidak Diketahui')
+            ->map(fn ($group, $namaArea) => [
+                'nama_area' => $namaArea,
+                'jumlah_transaksi' => $group->count(),
+                'total_pendapatan' => (float) $group->sum('biaya_total'),
+            ])
             ->values();
 
         return response()->json([
             'success' => true,
             'filter' => [
-                'tanggal_mulai' => $request->tanggal_mulai,
-                'tanggal_selesai' => $request->tanggal_selesai,
-                'jenis_kendaraan' => $request->jenis_kendaraan,
-                'id_area' => $request->id_area,
+                'tanggal_mulai' => $validated['tanggal_mulai'] ?? null,
+                'tanggal_selesai' => $validated['tanggal_selesai'] ?? null,
+                'jenis_kendaraan' => $validated['jenis_kendaraan'] ?? null,
+                'id_area' => $validated['id_area'] ?? null,
             ],
             'ringkasan' => [
                 'total_pendapatan' => $totalPendapatan,

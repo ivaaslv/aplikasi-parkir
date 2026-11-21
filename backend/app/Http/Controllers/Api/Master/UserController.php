@@ -3,48 +3,33 @@
 namespace App\Http\Controllers\Api\Master;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Master\UserRequest;
 use App\Models\LogAktivitas;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
     public function index()
     {
-        $users = User::orderByDesc('id_user')->get();
-
         return response()->json([
             'success' => true,
-            'data' => $users,
+            'data' => User::orderByDesc('id_user')->get(),
         ], 200);
     }
 
-    public function store(Request $request)
+    public function store(UserRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'nama_lengkap' => 'required|string|max:100',
-            'username' => 'required|string|max:50|unique:tb_user,username',
-            'password' => 'required|string|min:6',
-            'role' => 'required|in:admin,petugas,owner',
-            'status_aktif' => 'nullable|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
+        $validated = $request->validated();
 
         $user = User::create([
-            'nama_lengkap' => $request->nama_lengkap,
-            'username' => $request->username,
-            'password' => Hash::make($request->password),
-            'role' => $request->role,
-            'status_aktif' => $request->has('status_aktif') ? (int) $request->boolean('status_aktif') : 1,
+            'nama_lengkap' => $validated['nama_lengkap'],
+            'username' => $validated['username'],
+            'password' => Hash::make($validated['password']),
+            'role' => $validated['role'],
+            'status_aktif' => array_key_exists('status_aktif', $validated)
+                ? (int) filter_var($validated['status_aktif'], FILTER_VALIDATE_BOOLEAN)
+                : 1,
         ]);
 
         LogAktivitas::create([
@@ -77,7 +62,7 @@ class UserController extends Controller
         ], 200);
     }
 
-    public function update(Request $request, string $id)
+    public function update(UserRequest $request, string $id)
     {
         $user = User::find($id);
 
@@ -88,30 +73,21 @@ class UserController extends Controller
             ], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'nama_lengkap' => 'sometimes|required|string|max:100',
-            'username' => 'sometimes|required|string|max:50|unique:tb_user,username,' . $user->id_user . ',id_user',
-            'password' => 'nullable|string|min:6',
-            'role' => 'sometimes|required|in:admin,petugas,owner',
-            'status_aktif' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
+        $payload = [];
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $validator->errors(),
-            ], 422);
+        foreach (['nama_lengkap', 'username', 'role'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $payload[$field] = $validated[$field];
+            }
         }
 
-        $payload = $request->only(['nama_lengkap', 'username', 'role']);
-
-        if ($request->filled('password')) {
-            $payload['password'] = Hash::make($request->password);
+        if (! empty($validated['password'])) {
+            $payload['password'] = Hash::make($validated['password']);
         }
 
-        if ($request->has('status_aktif')) {
-            $payload['status_aktif'] = (int) $request->boolean('status_aktif');
+        if (array_key_exists('status_aktif', $validated)) {
+            $payload['status_aktif'] = (int) filter_var($validated['status_aktif'], FILTER_VALIDATE_BOOLEAN);
         }
 
         $user->update($payload);

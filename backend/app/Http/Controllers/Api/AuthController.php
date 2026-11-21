@@ -3,28 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
 use App\Models\LogAktivitas;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
-    public function login(Request $request) {
-        $validator = Validator::make($request->all(), [
-            'username' => 'required|string',
-            'password' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi Gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $credentials = $request->only('username', 'password');
+    public function login(LoginRequest $request)
+    {
+        $credentials = $request->validated();
 
         if (! $token = auth('api')->attempt($credentials)) {
             return response()->json([
@@ -55,19 +41,21 @@ class AuthController extends Controller
             'message' => 'Login berhasil',
             'access_token' => $token,
             'token_type' => 'bearer',
-            'expires_in' => auth('api')->factory()->getTTL()*60,
+            'expires_in' => auth('api')->factory()->getTTL() * 60,
             'user' => $user,
         ], 200);
     }
 
-    public function me(){
+    public function me()
+    {
         return response()->json([
             'success' => true,
             'user' => auth('api')->user(),
         ], 200);
     }
 
-    public function logout() {
+    public function logout()
+    {
         $user = auth('api')->user();
 
         if ($user) {
@@ -86,13 +74,15 @@ class AuthController extends Controller
         ], 200);
     }
 
-    public function refresh() {
+    public function refresh()
+    {
         $newToken = auth('api')->refresh();
 
         return response()->json([
             'success' => true,
             'access_token' => $newToken,
-            'token_type' => auth('api')->factory()->getTTL()*60,
+            'token_type' => 'bearer',
+            'expires_in' => auth('api')->factory()->getTTL() * 60,
         ], 200);
     }
 }

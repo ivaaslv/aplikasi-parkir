@@ -3,41 +3,27 @@
 namespace App\Http\Controllers\Api\Master;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Master\TarifRequest;
 use App\Models\LogAktivitas;
 use App\Models\Tarif;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class TarifController extends Controller
 {
     public function index()
     {
-        $tarif = Tarif::orderBy('id_tarif')->get();
-
         return response()->json([
             'success' => true,
-            'data' => $tarif,
+            'data' => Tarif::orderBy('id_tarif')->get(),
         ], 200);
     }
 
-    public function store(Request $request)
+    public function store(TarifRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'jenis_kendaraan' => 'required|string|max:50|unique:tb_tarif,jenis_kendaraan',
-            'tarif_per_jam' => 'required|numeric|min:0',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
+        $validated = $request->validated();
 
         $tarif = Tarif::create([
-            'jenis_kendaraan' => strtolower($request->jenis_kendaraan),
-            'tarif_per_jam' => $request->tarif_per_jam,
+            'jenis_kendaraan' => strtolower(trim($validated['jenis_kendaraan'])),
+            'tarif_per_jam' => $validated['tarif_per_jam'],
         ]);
 
         LogAktivitas::create([
@@ -70,7 +56,7 @@ class TarifController extends Controller
         ], 200);
     }
 
-    public function update(Request $request, string $id)
+    public function update(TarifRequest $request, string $id)
     {
         $tarif = Tarif::find($id);
 
@@ -81,25 +67,15 @@ class TarifController extends Controller
             ], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'jenis_kendaraan' => 'sometimes|required|string|max:50|unique:tb_tarif,jenis_kendaraan,' . $tarif->id_tarif . ',id_tarif',
-            'tarif_per_jam' => 'sometimes|required|numeric|min:0',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
+        $validated = $request->validated();
         $payload = [];
-        if ($request->has('jenis_kendaraan')) {
-            $payload['jenis_kendaraan'] = strtolower($request->jenis_kendaraan);
+
+        if (array_key_exists('jenis_kendaraan', $validated)) {
+            $payload['jenis_kendaraan'] = strtolower(trim($validated['jenis_kendaraan']));
         }
-        if ($request->has('tarif_per_jam')) {
-            $payload['tarif_per_jam'] = $request->tarif_per_jam;
+
+        if (array_key_exists('tarif_per_jam', $validated)) {
+            $payload['tarif_per_jam'] = $validated['tarif_per_jam'];
         }
 
         $tarif->update($payload);
