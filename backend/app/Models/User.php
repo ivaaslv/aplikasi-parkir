@@ -6,21 +6,27 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable
+class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use Notifiable;
 
     /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
      */
+    protected $table = 'tb_user';
+    protected $primaryKey = 'id_user';
+
     protected $fillable = [
-        'name',
-        'email',
+        'nama_lengkap',
+        'username',
         'password',
+        'role',
+        'status_aktif',
     ];
 
     /**
@@ -30,19 +36,38 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
-        'remember_token',
     ];
+
+    public function kendaraan()
+    {
+        return $this->hasMany(Kendaraan::class, 'id_user', 'id_user');
+    }
+
+    public function transaksi() 
+    {
+        return $this->hasMany(Transaksi::class, 'id_user', 'id_user');
+    }
+
+    public function logAktivitas()
+    {
+        return $this->hasMany(LogAktivitas::class, 'id_user', 'id_user');
+    }
+
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
 
     /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
      */
-    protected function casts(): array
+    public function getJWTCustomClaims()
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'role' => $this->role,
+            'username' => $this->username,
         ];
     }
 }
