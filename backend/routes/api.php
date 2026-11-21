@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\LaporanController;
+use App\Http\Controllers\Api\LogAktivitasController;
 use App\Http\Controllers\Api\Master\AreaParkirController;
 use App\Http\Controllers\Api\Master\KendaraanController;
 use App\Http\Controllers\Api\Master\TarifController;
@@ -23,6 +25,7 @@ Route::middleware(['auth:api', 'role:admin'])->prefix('admin')->group(function()
     Route::apiResource('tarif', TarifController::class);
     Route::apiResource('area-parkir', AreaParkirController::class);
     Route::apiResource('kendaraan', KendaraanController::class);
+    Route::get('log-aktivitas', [LogAktivitasController::class, 'index']);
 });
 
 Route::middleware(['auth:api', 'role:admin, petugas'])->prefix('operasional')->group(function() {
@@ -33,5 +36,5 @@ Route::middleware(['auth:api', 'role:admin, petugas'])->prefix('operasional')->g
 });
 
 Route::middleware(['auth:api', 'role:admin, owner'])->prefix('laporan')->group(function() {
-
+    Route::get('pendapatan', [LaporanController::class, 'pendapatan']);
 });
