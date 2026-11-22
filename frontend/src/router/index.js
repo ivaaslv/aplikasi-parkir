@@ -1,62 +1,86 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getRole, getHomeRouteByRole, getToken } from '../utils/auth'
+import LandingView from '../views/LandingView.vue'
 
-import LoginView from '../views/LoginView.vue'
-import AdminDashboardView from '../views/admin/DashboardView.vue'
-import PetugasTransaksiView from '../views/petugas/TransaksiView.vue'
-import OwnerLaporanView from '../views/owner/LaporanView.vue'
+// Mapping dashboard default per role
+const roleHomeMap = {
+  admin: '/admin/dashboard',
+  petugas: '/petugas/dashboard',
+  owner: '/owner/dashboard',
+}
 
 const routes = [
-  { path: '/', redirect: () => getHomeRouteByRole(getRole()) },
-  { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
-
-  // Admin
   {
-    path: '/admin/dashboard',
-    name: 'admin.dashboard',
-    component: AdminDashboardView,
-    meta: { requiresAuth: true, roles: ['admin'] },
+    path: '/',
+    name: 'landing',
+    component: LandingView,
+    meta: { public: true, title: 'Parkly — Sistem Manajemen Parkir' },
+  },
+  {
+    path: '/login',
+    name: 'login',
+    // Aktifkan import di bawah setelah file LoginView.vue dibuat:
+    // component: () => import('@/views/LoginView.vue'),
+    component: LandingView,
+    meta: { guestOnly: true, title: 'Masuk — Parkly' },
   },
 
-  // Petugas
-  {
-    path: '/petugas/transaksi',
-    name: 'petugas.transaksi',
-    component: PetugasTransaksiView,
-    meta: { requiresAuth: true, roles: ['petugas', 'admin'] },
-  },
+  // --- Placeholder Route Role (aktifkan bertahap saat view-nya dibuat) ---
+  // {
+  //   path: '/admin/dashboard',
+  //   name: 'admin-dashboard',
+  //   component: () => import('@/views/admin/AdminDashboardView.vue'),
+  //   meta: { requiresAuth: true, role: 'admin', title: 'Dashboard Admin — Parkly' },
+  // },
+  // {
+  //   path: '/petugas/dashboard',
+  //   name: 'petugas-dashboard',
+  //   component: () => import('@/views/petugas/PetugasDashboardView.vue'),
+  //   meta: { requiresAuth: true, role: 'petugas', title: 'Dashboard Petugas — Parkly' },
+  // },
+  // {
+  //   path: '/owner/dashboard',
+  //   name: 'owner-dashboard',
+  //   component: () => import('@/views/owner/OwnerDashboardView.vue'),
+  //   meta: { requiresAuth: true, role: 'owner', title: 'Dashboard Owner — Parkly' },
+  // },
 
-  // Owner
+  // Fallback jika path tidak ditemukan
   {
-    path: '/owner/laporan',
-    name: 'owner.laporan',
-    component: OwnerLaporanView,
-    meta: { requiresAuth: true, roles: ['owner', 'admin'] },
+    path: '/:pathMatch(.*)*',
+    redirect: '/',
   },
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) {
+      return {
+        el: to.hash,
+        behavior: 'smooth',
+        top: 96, // Offset agar tidak tertutup floating pill navbar
+      }
+    }
+    return { top: 0, behavior: 'smooth' }
+  },
 })
 
-router.beforeEach((to, from, next) => {
-  const token = getToken()
-  const role = getRole()
+// Navigation Guard (cek token & role dari localStorage)
+// Ganti bagian pembacaan user di router.beforeEach (src/router/index.js) menjadi:
+const token = localStorage.getItem('token')
+const userRaw = localStorage.getItem('user')
 
-  if (to.meta.requiresAuth && !token) {
-    return next('/login')
+let user = null
+if (userRaw && userRaw !== 'undefined') {
+  try {
+    user = JSON.parse(userRaw)
+  } catch {
+    localStorage.removeItem('user')
   }
+}
 
-  if (to.meta.guestOnly && token) {
-    return next(getHomeRouteByRole(role))
-  }
-
-  if (to.meta.roles && !to.meta.roles.includes(role)) {
-    return next(getHomeRouteByRole(role))
-  }
-
-  next()
-})
+const userRole = user?.role
 
 export default router
