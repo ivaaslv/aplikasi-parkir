@@ -1,11 +1,27 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LandingView from '../views/LandingView.vue'
+import LoginView from '../views/LoginView.vue'
 
-// Mapping dashboard default per role
-const roleHomeMap = {
+export const roleHomeMap = {
   admin: '/admin/dashboard',
   petugas: '/petugas/dashboard',
   owner: '/owner/dashboard',
+}
+
+export function getAuthUser() {
+  const token = localStorage.getItem('token')
+  const userRaw = localStorage.getItem('user')
+  if (!token || !userRaw || userRaw === 'undefined') {
+    return { token: null, user: null, role: null }
+  }
+  try {
+    const user = JSON.parse(userRaw)
+    return { token, user, role: user?.role || null }
+  } catch {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    return { token: null, user: null, role: null }
+  }
 }
 
 const routes = [
@@ -13,38 +29,33 @@ const routes = [
     path: '/',
     name: 'landing',
     component: LandingView,
-    meta: { public: true, title: 'Parkly — Sistem Manajemen Parkir' },
+    meta: { public: true, title: 'ParkFlow — Sistem Manajemen Parkir' },
   },
   {
     path: '/login',
     name: 'login',
-    // Aktifkan import di bawah setelah file LoginView.vue dibuat:
-    // component: () => import('@/views/LoginView.vue'),
-    component: LandingView,
-    meta: { guestOnly: true, title: 'Masuk — Parkly' },
+    component: LoginView,
+    meta: { guestOnly: true, title: 'Masuk — ParkFlow' },
   },
-
-  // --- Placeholder Route Role (aktifkan bertahap saat view-nya dibuat) ---
-  // {
-  //   path: '/admin/dashboard',
-  //   name: 'admin-dashboard',
-  //   component: () => import('@/views/admin/AdminDashboardView.vue'),
-  //   meta: { requiresAuth: true, role: 'admin', title: 'Dashboard Admin — Parkly' },
-  // },
+  {
+    path: '/admin/dashboard',
+    name: 'admin-dashboard',
+    component: () => import('../views/admin/DashboardView.vue'),
+    meta: { requiresAuth: true, role: 'admin', title: 'Dashboard Admin — ParkFlow' },
+  },
+  // Aktifkan saat view petugas & owner sudah dibuat:
   // {
   //   path: '/petugas/dashboard',
   //   name: 'petugas-dashboard',
-  //   component: () => import('@/views/petugas/PetugasDashboardView.vue'),
-  //   meta: { requiresAuth: true, role: 'petugas', title: 'Dashboard Petugas — Parkly' },
+  //   component: () => import('../views/petugas/PetugasDashboardView.vue'),
+  //   meta: { requiresAuth: true, role: 'petugas', title: 'Dashboard Petugas — ParkFlow' },
   // },
   // {
   //   path: '/owner/dashboard',
   //   name: 'owner-dashboard',
-  //   component: () => import('@/views/owner/OwnerDashboardView.vue'),
-  //   meta: { requiresAuth: true, role: 'owner', title: 'Dashboard Owner — Parkly' },
+  //   component: () => import('../views/owner/OwnerDashboardView.vue'),
+  //   meta: { requiresAuth: true, role: 'owner', title: 'Dashboard Owner — ParkFlow' },
   // },
-
-  // Fallback jika path tidak ditemukan
   {
     path: '/:pathMatch(.*)*',
     redirect: '/',
@@ -60,27 +71,33 @@ const router = createRouter({
       return {
         el: to.hash,
         behavior: 'smooth',
-        top: 96, // Offset agar tidak tertutup floating pill navbar
+        top: 96,
       }
     }
     return { top: 0, behavior: 'smooth' }
   },
 })
 
-// Navigation Guard (cek token & role dari localStorage)
-// Ganti bagian pembacaan user di router.beforeEach (src/router/index.js) menjadi:
-const token = localStorage.getItem('token')
-const userRaw = localStorage.getItem('user')
-
-let user = null
-if (userRaw && userRaw !== 'undefined') {
-  try {
-    user = JSON.parse(userRaw)
-  } catch {
-    localStorage.removeItem('user')
+router.beforeEach((to, from, next) => {
+  if (to.meta?.title) {
+    document.title = to.meta.title
   }
-}
 
-const userRole = user?.role
+  const { token, role } = getAuthUser()
+
+  if (to.meta?.requiresAuth && !token) {
+    return next({ name: 'login', query: { redirect: to.fullPath } })
+  }
+
+  if (to.meta?.guestOnly && token && role && roleHomeMap[role]) {
+    return next(roleHomeMap[role])
+  }
+
+  if (to.meta?.role && role && to.meta.role !== role) {
+    return next(roleHomeMap[role] || '/login')
+  }
+
+  return next()
+})
 
 export default router
