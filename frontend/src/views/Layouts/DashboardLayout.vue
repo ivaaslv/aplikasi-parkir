@@ -1,3 +1,4 @@
+<!-- src/layouts/DashboardLayout.vue -->
 <script setup>
 import { ref } from 'vue'
 import Sidebar from '/src/components/Sidebar.vue'
@@ -16,7 +17,7 @@ const mobileSidebarOpen = ref(false)
 </script>
 
 <template>
-  <div class="flex min-h-screen gap-x-6 bg-[#F8FAFC] text-[#0F172A] lg:gap-x-8">
+  <div class="flex min-h-screen w-full bg-[#F8FAFC] text-[#0F172A]">
     <Sidebar
       :collapsed="sidebarCollapsed"
       :mobile-open="mobileSidebarOpen"
@@ -38,8 +39,8 @@ const mobileSidebarOpen = ref(false)
         @logout="emit('logout')"
       />
 
-      <main class="flex-1 px-6 py-7 lg:px-10 lg:py-9">
-        <div class="mx-auto max-w-[1320px]">
+      <main class="min-w-0 flex-1 px-6 py-6 lg:px-8 lg:py-8">
+        <div class="mx-auto w-full max-w-[1320px]">
           <slot />
         </div>
       </main>

@@ -1,3 +1,4 @@
+<!-- src/components/Topbar.vue -->
 <script setup>
 import { CalendarDays, Bell, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import { computed } from 'vue'
@@ -12,6 +13,7 @@ const emit = defineEmits(['open-mobile', 'toggle-collapse', 'logout'])
 
 const displayName = computed(
   () =>
+    props.user?.nama_lengkap ||
     props.user?.nama ||
     props.user?.name ||
     props.user?.username ||
@@ -53,51 +55,51 @@ const formattedToday = computed(() =>
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] bg-[#FFFFFF]/95 px-6 py-3 backdrop-blur-xs lg:px-8">
+  <header class="sticky top-0 z-30 flex h-[65px] w-full items-center justify-between gap-3 border-b border-[#E2E8F0] bg-[#FFFFFF] px-4 lg:px-6">
     <!-- Kiri: Toggle Sidebar + Tanggal -->
-    <div class="flex items-center gap-2.5">
+    <div class="flex min-w-0 items-center gap-2">
       <button
         type="button"
         @click="emit('open-mobile')"
-        class="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-2 text-[#475569] hover:border-olive hover:text-olive lg:hidden"
+        class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#475569] transition-colors hover:border-olive hover:text-olive lg:hidden"
         aria-label="Buka menu"
       >
-        <Menu :size="16" />
+        <Menu :size="15" />
       </button>
 
       <button
         type="button"
         @click="emit('toggle-collapse')"
         :title="collapsed ? 'Buka sidebar' : 'Tutup sidebar'"
-        class="hidden rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-2 text-[#475569] transition-colors hover:border-olive hover:text-olive lg:inline-flex"
+        class="hidden h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#475569] transition-colors hover:border-olive hover:text-olive lg:inline-flex"
       >
         <PanelLeftOpen v-if="collapsed" :size="15" />
         <PanelLeftClose v-else :size="15" />
       </button>
 
-      <div class="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-1.5 text-[10.5px] font-medium text-[#475569]">
-        <CalendarDays :size="13" class="text-olive" />
-        <span class="capitalize">{{ formattedToday }}</span>
+      <div class="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-1.5 text-[10.5px] font-medium text-[#475569]">
+        <CalendarDays :size="13" class="shrink-0 text-olive" />
+        <span class="whitespace-nowrap capitalize">{{ formattedToday }}</span>
       </div>
     </div>
 
     <!-- Kanan: Notif + Profil Akun Login + Logout -->
-    <div class="flex items-center gap-2.5">
+    <div class="flex shrink-0 items-center gap-2.5">
       <button
         type="button"
-        class="relative flex h-8 w-8 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#FFFFFF] text-[#475569] transition-colors hover:border-olive hover:text-olive"
+        class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#E2E8F0] bg-[#FFFFFF] text-[#475569] transition-colors hover:border-olive hover:text-olive"
         aria-label="Notifikasi"
       >
         <Bell :size="14" />
         <span class="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-olive" />
       </button>
 
-      <div class="flex items-center gap-2.5 rounded-full border border-[#E2E8F0] bg-[#FFFFFF] py-2 px-4 pr-6">
-        <span class="flex h-7 w-7 items-center justify-center rounded-full bg-[#161F00] text-[10px] font-bold text-white">
+      <div class="flex shrink-0 items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#FFFFFF] py-2 pt-3 pl-1.5 pr-4">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#161F00] text-[10px] font-bold text-white">
           {{ displayInitials }}
         </span>
         <div class="hidden text-left sm:block">
-          <p class="text-[11px] font-bold leading-tight text-[#0F172A] ">{{ displayName }}</p>
+          <p class="whitespace-nowrap text-[11px] font-bold leading-1 text-[#0F172A]">{{ displayName }}</p>
           <span
             :class="[
               'inline-block rounded-full px-2 py-0.5 text-[8.5px] font-bold',
@@ -113,7 +115,7 @@ const formattedToday = computed(() =>
         type="button"
         @click="emit('logout')"
         title="Keluar sistem"
-        class="flex h-8 w-8 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#FFFFFF] text-[#64748B] transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+        class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#E2E8F0] bg-[#FFFFFF] text-[#64748B] transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
       >
         <LogOut :size="14" />
       </button>

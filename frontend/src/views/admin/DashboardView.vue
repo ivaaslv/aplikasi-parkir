@@ -17,13 +17,13 @@ import {
 } from 'lucide-vue-next'
 import { motion } from 'motion-v'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
 import api from '../../services/api'
 import { getAuthUser } from '../../router'
 
 const LOGS_PER_PAGE = 10
-
+const route = useRoute()
 const router = useRouter()
 const authState = getAuthUser()
 
@@ -318,7 +318,7 @@ const quickActions = [
   { label: 'Kelola Area Parkir', menuId: 'kelola-area', icon: Plus, primary: true },
   { label: 'Kelola Tarif Parkir', menuId: 'kelola-tarif', icon: Tag, tag: 'NEW' },
   { label: 'Kelola Data Kendaraan', menuId: 'kelola-kendaraan', icon: CarFront },
-  { label: 'Kelola Akun Pengguna', menuId: 'kelola-users', icon: UserCog },
+  { label: 'Kelola Akun Pengguna', to: '/admin/users', menuId: 'kelola-users', icon: UserCog },
   { label: 'Log Aktivitas Sistem', menuId: 'log-aktivitas', icon: History },
 ]
 
