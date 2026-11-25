@@ -49,6 +49,12 @@ const routes = [
     component: () => import('../views/admin/UsersView.vue'),
     meta: { requiresAuth: true, role: 'admin', title: 'User Management — ParkFlow' },
   },
+  {
+    path: '/admin/tarif',
+    name: 'admin-tarif',
+    component: () => import('../views/admin/TarifView.vue'),
+    meta: { requiresAuth: true, role: 'admin', title: 'Tarif Management — ParkFlow' },
+  },
   // Aktifkan saat view petugas & owner sudah dibuat:
   // {
   //   path: '/petugas/dashboard',
