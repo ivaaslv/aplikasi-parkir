@@ -8,6 +8,7 @@ use App\Http\Requests\Transaksi\TransaksiMasukRequest;
 use App\Models\AreaParkir;
 use App\Models\Kendaraan;
 use App\Models\LogAktivitas;
+use App\Models\PengaturanParkir;
 use App\Models\Tarif;
 use App\Models\Transaksi;
 use Illuminate\Http\Request;
@@ -127,9 +128,10 @@ class TransaksiController extends Controller
     public function keluar(TransaksiKeluarRequest $request)
     {
         $validated = $request->validated();
+        $karcisHilang = (bool) $request->boolean('karcis_hilang');
 
         try {
-            $transaksi = DB::transaction(function () use ($validated) {
+            $transaksi = DB::transaction(function () use ($validated, $karcisHilang) {
                 $query = Transaksi::with(['kendaraan', 'tarif', 'areaParkir'])
                     ->where('status', 'masuk');
 
@@ -152,11 +154,27 @@ class TransaksiController extends Controller
                 $menit = max(1, $trx->waktu_masuk->diffInMinutes($waktuKeluar));
                 $durasiJam = (int) ceil($menit / 60);
                 $tarifPerJam = (float) ($trx->tarif->tarif_per_jam ?? 0);
-                $biayaTotal = $durasiJam * $tarifPerJam;
+                $biayaParkirNormal = $durasiJam * $tarifPerJam;
+
+                $biayaDenda = 0;
+
+                if ($karcisHilang) {
+                    $config = PengaturanParkir::first();
+                    $biayaDenda = (float) ($config->denda_karcis_hilang ?? 25000);
+                    $skemaDenda = $config->skema_denda ?? 'tambahan';
+
+                    $biayaTotal = $skemaDenda === 'pengganti'
+                        ? $biayaDenda
+                        : ($biayaParkirNormal + $biayaDenda);
+                } else {
+                    $biayaTotal = $biayaParkirNormal;
+                }
 
                 $trx->update([
                     'waktu_keluar' => $waktuKeluar,
                     'durasi_jam' => $durasiJam,
+                    'karcis_hilang' => $karcisHilang,
+                    'biaya_denda' => $biayaDenda,
                     'biaya_total' => $biayaTotal,
                     'status' => 'keluar',
                 ]);
@@ -169,9 +187,10 @@ class TransaksiController extends Controller
                 }
 
                 $platNomor = $trx->kendaraan->plat_nomor ?? '-';
+                $catatanDenda = $karcisHilang ? ", Denda Rp {$biayaDenda}" : '';
                 LogAktivitas::create([
                     'id_user' => auth('api')->id(),
-                    'aktivitas' => "Parkir keluar {$platNomor} (Durasi {$durasiJam} jam, Biaya Rp {$biayaTotal})",
+                    'aktivitas' => "Parkir keluar {$platNomor} (Durasi {$durasiJam} jam{$catatanDenda}, Total Rp {$biayaTotal})",
                     'status' => 'berhasil',
                     'waktu_aktivitas' => now(),
                 ]);

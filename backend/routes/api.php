@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Master\KendaraanController;
 use App\Http\Controllers\Api\Master\TarifController;
 use App\Http\Controllers\Api\Master\UserController;
 use App\Http\Controllers\Api\TransaksiController;
+use App\Http\Controllers\Api\Master\PengaturanParkirController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -27,6 +28,8 @@ Route::middleware(['auth:api', 'role:admin'])->prefix('admin')->group(function()
     Route::apiResource('kendaraan', KendaraanController::class);
     Route::get('log-aktivitas', [LogAktivitasController::class, 'index']);
     Route::delete('log-aktivitas/bulk', [LogAktivitasController::class, 'destroyBulk']);
+    Route::get('pengaturan-parkir', [PengaturanParkirController::class, 'show']);
+    Route::put('pengaturan-parkir', [PengaturanParkirController::class, 'update']);
 });
 
 Route::middleware(['auth:api', 'role:admin, petugas'])->prefix('operasional')->group(function() {
@@ -34,6 +37,7 @@ Route::middleware(['auth:api', 'role:admin, petugas'])->prefix('operasional')->g
     Route::post('transaksi/masuk', [TransaksiController::class, 'masuk']);
     Route::post('transaksi/keluar', [TransaksiController::class, 'keluar']);
     Route::get('transaksi/{id}/struk', [TransaksiController::class, 'struk']);
+    Route::get('pengaturan-parkir', [PengaturanParkirController::class, 'show']);
 });
 
 Route::middleware(['auth:api', 'role:admin, owner'])->prefix('laporan')->group(function() {

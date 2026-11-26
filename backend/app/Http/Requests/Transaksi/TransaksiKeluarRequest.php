@@ -16,6 +16,7 @@ class TransaksiKeluarRequest extends FormRequest
         return [
             'id_parkir' => ['nullable', 'integer', 'exists:tb_transaksi,id_parkir', 'required_without:plat_nomor'],
             'plat_nomor' => ['nullable', 'string', 'max:20', 'required_without:id_parkir'],
+            'karcis_hilang' => ['nullable', 'boolean'],
         ];
     }
 

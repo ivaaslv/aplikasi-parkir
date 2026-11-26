@@ -16,7 +16,9 @@ class Transaksi extends Model
         'id_tarif',
         'durasi_jam',
         'biaya_total',
+        'biaya_denda',
         'status',
+        'karcis_hilang',
         'id_user',
         'id_area',
     ];
@@ -24,6 +26,7 @@ class Transaksi extends Model
     protected $casts = [
         'waktu_masuk' => 'datetime',
         'waktu_keluar' => 'datetime',
+        'karcis_hilang' => 'boolean',
     ];
 
     public function kendaraan() {

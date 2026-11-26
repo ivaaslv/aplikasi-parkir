@@ -1,0 +1,23 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('tb_transaksi', function (Blueprint $table) {
+            $table->boolean('karcis_hilang')->default(false)->after('status');
+            $table->decimal('biaya_denda', 10, 0)->default(0)->after('biaya_total');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('tb_transaksi', function (Blueprint $table) {
+            $table->dropColumn(['karcis_hilang', 'biaya_denda']);
+        });
+    }
+};
