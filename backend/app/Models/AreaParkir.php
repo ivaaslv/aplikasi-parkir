@@ -11,6 +11,8 @@ class AreaParkir extends Model
 
     protected $fillable = [
         'nama_area',
+        'deskripsi',
+        'jenis_kendaraan',
         'kapasitas',
         'terisi',
     ];

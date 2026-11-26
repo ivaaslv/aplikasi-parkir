@@ -23,6 +23,8 @@ class AreaParkirController extends Controller
 
         $area = AreaParkir::create([
             'nama_area' => trim($validated['nama_area']),
+            'deskripsi' => isset($validated['deskripsi']) ? trim($validated['deskripsi']) : null,
+            'jenis_kendaraan' => strtolower(trim($validated['jenis_kendaraan'] ?? 'semua')),
             'kapasitas' => (int) $validated['kapasitas'],
             'terisi' => isset($validated['terisi']) ? (int) $validated['terisi'] : 0,
         ]);
@@ -81,6 +83,8 @@ class AreaParkirController extends Controller
 
         $area->update([
             'nama_area' => isset($validated['nama_area']) ? trim($validated['nama_area']) : $area->nama_area,
+            'deskripsi' => isset($validated['deskripsi']) ? trim($validated['deskripsi']) : null,
+            'jenis_kendaraan' => strtolower(trim($validated['jenis_kendaraan'] ?? 'semua')),
             'kapasitas' => $kapasitasBaru,
             'terisi' => $terisiBaru,
         ]);

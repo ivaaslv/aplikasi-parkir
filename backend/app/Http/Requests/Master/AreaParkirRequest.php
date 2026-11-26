@@ -29,6 +29,8 @@ class AreaParkirRequest extends FormRequest
                 'max:100',
                 Rule::unique('tb_area_parkir', 'nama_area')->ignore($areaId, 'id_area'),
             ],
+            'deskripsi' => ['nullable', 'string', 'max:255'],
+            'jenis_kendaraan' => [$isUpdate ? 'sometimes' : 'required', 'in:motor,mobil,lainnya,semua'],
             'kapasitas' => [$isUpdate ? 'sometimes' : 'required', 'integer', 'min:1'],
             'terisi' => $terisiRules,
         ];
