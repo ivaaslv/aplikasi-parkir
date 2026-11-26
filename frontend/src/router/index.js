@@ -61,6 +61,12 @@ const routes = [
     component: () => import('../views/admin/AreaParkirView.vue'),
     meta: { requiresAuth: true, role: 'admin', title: 'Area Parkir Management — ParkFlow' },
   },
+  {
+    path: '/admin/kendaraan',
+    name: 'admin-kendaraan',
+    component: () => import('../views/admin/KendaraanView.vue'),
+    meta: { requiresAuth: true, role: 'admin', title: 'Kendaraan Management — ParkFlow' },
+  },
   // Aktifkan saat view petugas & owner sudah dibuat:
   // {
   //   path: '/petugas/dashboard',
