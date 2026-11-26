@@ -1,8 +1,11 @@
 <!-- src/layouts/DashboardLayout.vue -->
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import Sidebar from '/src/components/Sidebar.vue'
 import Topbar from '/src/components/Topbar.vue'
+
+const SIDEBAR_COLLAPSED_KEY = 'parkflow_sidebar_collapsed'
 
 const props = defineProps({
   currentRole: { type: String, default: 'admin' },
@@ -12,8 +15,24 @@ const props = defineProps({
 
 const emit = defineEmits(['update:activeMenu', 'logout'])
 
-const sidebarCollapsed = ref(false)
+const route = useRoute()
+const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
 const mobileSidebarOpen = ref(false)
+
+watch(sidebarCollapsed, (val) => {
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(val))
+})
+
+watch(
+  () => route.path,
+  () => {
+    mobileSidebarOpen.value = false
+  }
+)
+
+onMounted(() => {
+  sidebarCollapsed.value = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+})
 </script>
 
 <template>

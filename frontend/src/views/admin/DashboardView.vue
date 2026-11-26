@@ -8,22 +8,23 @@ import {
   Tag,
   UserCog,
   History,
-  Activity,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
   RefreshCw,
+  ParkingSquare,
 } from 'lucide-vue-next'
 import { motion } from 'motion-v'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
 import api from '../../services/api'
 import { getAuthUser } from '../../router'
 
 const LOGS_PER_PAGE = 10
-const route = useRoute()
+const MAX_DASHBOARD_ZONES = 3
+
 const router = useRouter()
 const authState = getAuthUser()
 
@@ -46,8 +47,17 @@ const transactionsRaw = ref([])
 const logsRaw = ref([])
 const pendapatanData = ref(null)
 
+const occupancyAngleDeg = computed(
+  () => `${Math.round(occupancyPercentNum.value * 3.6)}deg`
+)
+
+const occupancyRingStyle = computed(() => ({
+  background: `conic-gradient(#50631D 0deg ${occupancyAngleDeg.value}, #E2E8F0 ${occupancyAngleDeg.value} 360deg)`,
+}))
+
 const adminDisplayName = computed(
   () =>
+    authUser.value?.nama_lengkap ||
     authUser.value?.nama ||
     authUser.value?.name ||
     authUser.value?.username ||
@@ -70,6 +80,19 @@ const formatRupiah = (amount) =>
     currency: 'IDR',
     maximumFractionDigits: 0,
   }).format(Number(amount) || 0)
+
+const formatAngka = (num) =>
+  new Intl.NumberFormat('id-ID', {
+    maximumFractionDigits: 0,
+  }).format(Number(num) || 0)
+
+const formatPercentValue = (used, total) => {
+  const cap = Number(total) || 0
+  if (cap <= 0) return 0
+  const rawPct = (Math.max(0, Number(used) || 0) / cap) * 100
+  const clamped = Math.min(100, Math.max(0, rawPct))
+  return Number.isInteger(clamped) ? clamped : Number(clamped.toFixed(1))
+}
 
 const extractList = (payload) => {
   if (Array.isArray(payload)) return payload
@@ -122,9 +145,14 @@ const fetchDashboardData = async (page = 1) => {
 
       if (hasServerMeta) {
         serverPaginated.value = true
-        currentPage.value = resData?.current_page ?? resData?.meta?.current_page ?? page
-        serverLastPage.value = Math.max(1, resData?.last_page ?? resData?.meta?.last_page ?? 1)
-        serverTotalLogs.value = resData?.total ?? resData?.meta?.total ?? list.length
+        currentPage.value =
+          resData?.current_page ?? resData?.meta?.current_page ?? page
+        serverLastPage.value = Math.max(
+          1,
+          resData?.last_page ?? resData?.meta?.last_page ?? 1
+        )
+        serverTotalLogs.value =
+          resData?.total ?? resData?.meta?.total ?? list.length
       } else {
         serverPaginated.value = false
         serverTotalLogs.value = list.length
@@ -177,7 +205,7 @@ onMounted(async () => {
   await fetchDashboardData(1)
 })
 
-const zones = computed(() =>
+const allZones = computed(() =>
   areasRaw.value.map((area, idx) => {
     const code =
       area.kode_area ||
@@ -187,47 +215,64 @@ const zones = computed(() =>
         .slice(0, 3)
         .toUpperCase()
     const name = area.nama_area || area.nama || area.name || `Area ${idx + 1}`
-    const total = Number(
-      area.kapasitas ?? area.kapasitas_slot ?? area.total_slot ?? 0
+    const total = Math.max(
+      0,
+      Number(area.kapasitas ?? area.kapasitas_slot ?? area.total_slot ?? 0)
     )
-    const used = Number(
-      area.terisi ??
-        area.slot_terisi ??
-        area.kendaraan_aktif ??
-        Math.max(0, total - Number(area.sisa_slot ?? area.slot_tersedia ?? total))
+    const used = Math.max(
+      0,
+      Number(
+        area.terisi ??
+          area.slot_terisi ??
+          area.kendaraan_aktif ??
+          Math.max(0, total - Number(area.sisa_slot ?? area.slot_tersedia ?? total))
+      )
     )
-    const percent = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
+    const percentNum = formatPercentValue(used, total)
 
     let status = 'Lega'
     let statusCls = 'bg-[#F1F5F9] text-[#475569]'
     let barCls = 'bg-[#64748B]'
     let badgeCls = 'bg-[#F1F5F9] text-[#334155]'
 
-    if (percent >= 80) {
+    if (percentNum >= 80) {
       status = 'Penuh'
       statusCls = 'bg-rose-100 text-rose-700'
       barCls = 'bg-rose-600'
       badgeCls = 'bg-rose-100 text-rose-700'
-    } else if (percent >= 35) {
+    } else if (percentNum >= 35) {
       status = 'Aman'
       statusCls = 'bg-[#D5EC96]/70 text-[#50631D]'
       barCls = 'bg-[#50631D]'
       badgeCls = 'bg-[#D5EC96] text-[#50631D]'
     }
 
+    const sortKey = area.created_at
+      ? new Date(area.created_at).getTime()
+      : Number(area.id_area ?? area.id ?? idx)
+
     return {
       id: area.id_area ?? area.id ?? idx,
+      sortKey: Number.isNaN(sortKey) ? idx : sortKey,
       code,
       name,
+      deskripsi: area.deskripsi || '',
+      jenis_kendaraan: area.jenis_kendaraan || 'semua',
       used,
       total,
-      percent,
+      percent: percentNum,
       status,
       statusCls,
       barCls,
       badgeCls,
     }
   })
+)
+
+const recentZones = computed(() =>
+  [...allZones.value]
+    .sort((a, b) => Number(b.sortKey) - Number(a.sortKey))
+    .slice(0, MAX_DASHBOARD_ZONES)
 )
 
 const totalPendapatan = computed(() => {
@@ -238,7 +283,8 @@ const totalPendapatan = computed(() => {
     return Number(pendapatanData.value.total)
   }
   return transactionsRaw.value.reduce(
-    (sum, trx) => sum + Number(trx.total_biaya ?? trx.biaya ?? trx.tarif ?? 0),
+    (sum, trx) =>
+      sum + Number(trx.biaya_total ?? trx.total_biaya ?? trx.biaya ?? trx.tarif ?? 0),
     0
   )
 })
@@ -248,25 +294,25 @@ const activeTransactions = computed(() =>
     (trx) =>
       !trx.waktu_keluar &&
       !trx.jam_keluar &&
-      String(trx.status || '').toLowerCase() !== 'selesai' &&
-      String(trx.status || '').toLowerCase() !== 'lunas'
+      !['keluar', 'selesai', 'lunas'].includes(
+        String(trx.status || '').toLowerCase()
+      )
   )
 )
 
 const totalCapacity = computed(() =>
-  zones.value.reduce((sum, z) => sum + z.total, 0)
+  allZones.value.reduce((sum, z) => sum + z.total, 0)
 )
 const totalUsedSlots = computed(() =>
-  zones.value.reduce((sum, z) => sum + z.used, 0)
+  allZones.value.reduce((sum, z) => sum + z.used, 0)
 )
 const totalFreeSlots = computed(() =>
   Math.max(0, totalCapacity.value - totalUsedSlots.value)
 )
-const occupancyPercent = computed(() =>
-  totalCapacity.value > 0
-    ? `${Math.round((totalUsedSlots.value / totalCapacity.value) * 100)}%`
-    : '0%'
+const occupancyPercentNum = computed(() =>
+  formatPercentValue(totalUsedSlots.value, totalCapacity.value)
 )
+const occupancyPercentLabel = computed(() => `${occupancyPercentNum.value}%`)
 
 const roleCounts = computed(() => {
   const counts = { admin: 0, petugas: 0, owner: 0 }
@@ -295,10 +341,11 @@ const kpiCards = computed(() => [
   },
   {
     label: 'OKUPANSI SLOT',
-    value: String(totalUsedSlots.value),
-    subValue: `/${totalCapacity.value}`,
-    percent: occupancyPercent.value,
-    foot: `${totalFreeSlots.value} Slot Kosong`,
+    value: formatAngka(totalUsedSlots.value),
+    subValue: `/${formatAngka(totalCapacity.value)}`,
+    percent: occupancyPercentLabel.value,
+    percentWidth: occupancyPercentNum.value,
+    foot: `${formatAngka(totalFreeSlots.value)} Slot Kosong`,
     icon: PieChart,
   },
   {
@@ -307,20 +354,71 @@ const kpiCards = computed(() => [
     unit: 'User',
     roles: [
       { label: `${roleCounts.value.admin} Admin`, cls: 'bg-[#161F00] text-white' },
-      { label: `${roleCounts.value.petugas} Petugas`, cls: 'bg-[#D5EC96] text-[#50631D]' },
-      { label: `${roleCounts.value.owner} Owner`, cls: 'bg-[#F1F5F9] text-[#475569]' },
+      {
+        label: `${roleCounts.value.petugas} Petugas`,
+        cls: 'bg-[#D5EC96] text-[#50631D]',
+      },
+      {
+        label: `${roleCounts.value.owner} Owner`,
+        cls: 'bg-[#F1F5F9] text-[#475569]',
+      },
     ],
     icon: Users,
   },
 ])
 
 const quickActions = [
-  { label: 'Kelola Area Parkir', menuId: 'kelola-area', icon: Plus, primary: true },
-  { label: 'Kelola Tarif Parkir', menuId: 'kelola-tarif', icon: Tag, tag: 'NEW' },
-  { label: 'Kelola Data Kendaraan', menuId: 'kelola-kendaraan', icon: CarFront },
-  { label: 'Kelola Akun Pengguna', to: '/admin/users', menuId: 'kelola-users', icon: UserCog },
-  { label: 'Log Aktivitas Sistem', menuId: 'log-aktivitas', icon: History },
+  {
+    label: 'Kelola Area Parkir',
+    to: '/admin/area-parkir',
+    menuId: 'kelola-area',
+    icon: Plus,
+    primary: true,
+  },
+  {
+    label: 'Kelola Tarif Parkir',
+    to: '/admin/tarif',
+    menuId: 'kelola-tarif',
+    icon: Tag,
+    tag: 'NEW',
+  },
+  {
+    label: 'Kelola Data Kendaraan',
+    to: '/admin/kendaraan',
+    menuId: 'kelola-kendaraan',
+    icon: CarFront,
+  },
+  {
+    label: 'Kelola Akun Pengguna',
+    to: '/admin/users',
+    menuId: 'kelola-users',
+    icon: UserCog,
+  },
+  {
+    label: 'Log Aktivitas Sistem',
+    to: '/admin/log-aktivitas',
+    menuId: 'log-aktivitas',
+    icon: History,
+  },
 ]
+
+const handleQuickAction = async (action) => {
+  activeMenu.value = action.menuId
+  if (!action.to) return
+
+  const resolved = router.resolve(action.to)
+  if (resolved.matched.length > 0) {
+    await router.push(action.to)
+    return
+  }
+
+  if (action.to === '/admin/area-parkir') {
+    const alt = router.resolve('/admin/area')
+    if (alt.matched.length > 0) {
+      await router.push('/admin/area')
+    }
+  }
+}
 
 const cleanText = (val) => {
   if (!val || String(val).trim() === '' || String(val).trim() === '-') return ''
@@ -331,6 +429,7 @@ const normalizedLogs = computed(() =>
   logsRaw.value.map((item, idx) => {
     const userObj = item.user || item.pengguna || {}
     const userName =
+      cleanText(userObj.nama_lengkap) ||
       cleanText(userObj.nama) ||
       cleanText(userObj.name) ||
       cleanText(userObj.username) ||
@@ -338,7 +437,8 @@ const normalizedLogs = computed(() =>
       cleanText(item.username) ||
       'Pengguna Sistem'
 
-    const roleLabel = cleanText(userObj.role) || cleanText(item.role) || 'Sistem'
+    const roleLabel =
+      cleanText(userObj.role) || cleanText(item.role) || 'Sistem'
     const activityText =
       cleanText(item.aktivitas) ||
       cleanText(item.keterangan) ||
@@ -346,11 +446,24 @@ const normalizedLogs = computed(() =>
       'Aktivitas Tercatat'
 
     const rawTime = cleanText(item.waktu_aktivitas) || cleanText(item.created_at)
-    const timePart = rawTime
-      ? rawTime.includes(' ')
-        ? rawTime.split(' ')[1]?.slice(0, 8) || rawTime.slice(0, 8)
-        : rawTime.slice(0, 8)
+    const parsedDate = rawTime ? new Date(rawTime) : null
+    const hasValidDate = parsedDate && !Number.isNaN(parsedDate.getTime())
+
+    const timePart = hasValidDate
+      ? new Intl.DateTimeFormat('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }).format(parsedDate)
       : 'Baru saja'
+
+    const datePart = hasValidDate
+      ? new Intl.DateTimeFormat('id-ID', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }).format(parsedDate)
+      : ''
 
     const lowerAct = activityText.toLowerCase()
     const type =
@@ -373,7 +486,7 @@ const normalizedLogs = computed(() =>
     return {
       id: item.id_log ?? item.id ?? idx,
       time: timePart,
-      ago: rawTime,
+      ago: datePart,
       initials,
       avatarCls:
         type === 'keluar'
@@ -385,7 +498,10 @@ const normalizedLogs = computed(() =>
       vehicle,
       activity: activityText,
       zone,
-      amount: Number(item.total_biaya) > 0 ? formatRupiah(item.total_biaya) : '',
+      amount:
+        Number(item.total_biaya ?? item.biaya_total) > 0
+          ? formatRupiah(item.total_biaya ?? item.biaya_total)
+          : '',
       status: cleanText(item.status) || 'Tercatat',
       statusCls:
         type === 'keluar'
@@ -462,7 +578,7 @@ const goToPage = async (page) => {
     >
       <div>
         <p class="text-[9.5px] font-bold tracking-[0.16em] text-olive">
-          OPERASIONAL PUSAT / KONTROL SISTEM TERPADU
+          OPERASIONAL PUSAT
         </p>
         <h1 class="mt-1.5 text-xl font-extrabold tracking-tight text-[#0F172A] sm:text-2xl">
           Dasbor Manajemen Parkir
@@ -474,7 +590,7 @@ const goToPage = async (page) => {
           type="button"
           @click="fetchDashboardData(currentPage)"
           :disabled="isLoading"
-          class="inline-flex items-center gap-1.5 rounded-2xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#475569] shadow-2xs transition-colors hover:border-olive hover:text-olive disabled:opacity-60"
+          class="inline-flex cursor-pointer items-center gap-1.5 rounded-2xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[11px] font-semibold text-[#475569] shadow-2xs transition-colors hover:border-olive hover:text-olive disabled:opacity-60"
         >
           <RefreshCw :size="13" :class="isLoading ? 'animate-spin' : ''" />
           <span>{{ isLoading ? 'Memuat...' : 'Refresh' }}</span>
@@ -506,12 +622,18 @@ const goToPage = async (page) => {
         :key="kpi.label"
         :initial="{ opacity: 0, y: 12 }"
         :animate="{ opacity: 1, y: 0 }"
-        :transition="{ duration: 0.35, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }"
+        :transition="{
+          duration: 0.35,
+          delay: index * 0.05,
+          ease: [0.22, 1, 0.36, 1],
+        }"
         :while-hover="{ y: -2 }"
         class="rounded-[22px] border border-[#E2E8F0] bg-white p-5 shadow-2xs transition-colors hover:border-olive/35 will-change-transform"
       >
         <div class="flex items-start justify-between gap-2">
-          <p class="text-[9.5px] font-bold tracking-wider text-[#94A3B8]">{{ kpi.label }}</p>
+          <p class="text-[9.5px] font-bold tracking-wider text-[#94A3B8]">
+            {{ kpi.label }}
+          </p>
           <span
             v-if="kpi.status"
             class="rounded-full bg-[#161F00] px-2.5 py-0.5 text-[9.5px] font-semibold text-[#D5EC96]"
@@ -520,9 +642,12 @@ const goToPage = async (page) => {
           </span>
           <span
             v-else-if="kpi.percent"
-            class="flex h-8 w-8 items-center justify-center rounded-full border-2 border-olive bg-[#F4F8EA] text-[9.5px] font-extrabold text-olive"
+            :style="occupancyRingStyle"
+            class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-[3px]"
           >
-            {{ kpi.percent }}
+            <span class="flex h-full w-full items-center justify-center rounded-full bg-white text-[9px] font-extrabold text-olive">
+              {{ kpi.percent }}
+            </span>
           </span>
           <span
             v-else
@@ -533,9 +658,15 @@ const goToPage = async (page) => {
         </div>
 
         <div class="mt-3.5 flex items-baseline gap-1.5">
-          <p class="text-xl font-extrabold tracking-tight text-[#0F172A]">{{ kpi.value }}</p>
-          <span v-if="kpi.subValue" class="text-xs font-semibold text-[#94A3B8]">{{ kpi.subValue }}</span>
-          <span v-if="kpi.unit" class="text-[11px] font-medium text-[#64748B]">{{ kpi.unit }}</span>
+          <p class="text-xl font-extrabold tracking-tight text-[#0F172A]">
+            {{ kpi.value }}
+          </p>
+          <span v-if="kpi.subValue" class="text-xs font-semibold text-[#94A3B8]">
+            {{ kpi.subValue }}
+          </span>
+          <span v-if="kpi.unit" class="text-[11px] font-medium text-[#64748B]">
+            {{ kpi.unit }}
+          </span>
         </div>
 
         <div class="mt-4">
@@ -545,6 +676,17 @@ const goToPage = async (page) => {
           >
             {{ kpi.sub }}
           </span>
+
+          <div v-else-if="kpi.percent" class="space-y-1.5">
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-[#F1F5F9]">
+              <div
+                class="h-full rounded-full bg-olive transition-all duration-500"
+                :style="{ width: `${kpi.percentWidth ?? 0}%` }"
+              />
+            </div>
+            <p class="text-[10.5px] font-medium text-[#64748B]">{{ kpi.foot }}</p>
+          </div>
+
           <p v-else-if="kpi.foot" class="text-[10.5px] font-medium text-[#64748B]">
             {{ kpi.foot }}
           </p>
@@ -561,7 +703,7 @@ const goToPage = async (page) => {
       </motion.article>
     </div>
 
-    <!-- Middle Grid: Kapasitas Area (Kiri) + Aksi Cepat & Status (Kanan) -->
+    <!-- Middle Grid: Kapasitas Area Terbaru (Kiri) + Aksi Cepat & Ketersediaan Slot (Kanan) -->
     <div class="mt-7 grid gap-6 lg:grid-cols-[1.55fr_0.95fr]">
       <motion.section
         :initial="{ opacity: 0, y: 14 }"
@@ -569,35 +711,52 @@ const goToPage = async (page) => {
         :transition="{ duration: 0.4, delay: 0.1 }"
         class="rounded-[24px] border border-[#E2E8F0] bg-white p-6 shadow-2xs will-change-transform"
       >
-        <div class="flex items-start gap-3">
-          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D5EC96] text-xs font-extrabold text-olive">
-            P
-          </span>
-          <div>
-            <h2 class="text-sm font-bold text-[#0F172A]">Kapasitas Area &amp; Zona Parkir</h2>
-            <p class="mt-0.5 text-[11px] text-[#64748B]">
-              Data real-time dari master area parkir di database.
-            </p>
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D5EC96] text-xs font-extrabold text-olive">
+              P
+            </span>
+            <div>
+              <h2 class="text-sm font-bold text-[#0F172A]">Kapasitas Area Terbaru</h2>
+              <p class="mt-0.5 text-[11px] text-[#64748B]">
+                Menampilkan maksimal {{ MAX_DASHBOARD_ZONES }} area parkir terbaru dari {{ allZones.length }} zona terdaftar.
+              </p>
+            </div>
           </div>
+
+          <button
+            type="button"
+            @click="router.push('/admin/area-parkir')"
+            class="shrink-0 cursor-pointer text-[11px] font-bold text-olive transition-colors hover:text-olive-dark"
+          >
+            Semua Area →
+          </button>
         </div>
 
-        <div v-if="zones.length > 0" class="mt-5 space-y-4">
+        <div v-if="recentZones.length > 0" class="mt-5 space-y-4">
           <div
-            v-for="zone in zones"
+            v-for="zone in recentZones"
             :key="zone.id"
             class="rounded-2xl border border-[#E2E8F0]/80 bg-[#F8FAFC]/75 p-4 transition-colors hover:border-olive/30"
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 min-w-0">
                 <span
                   :class="[
-                    'flex h-7 w-7 items-center justify-center rounded-xl text-[11px] font-extrabold',
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-[11px] font-extrabold',
                     zone.badgeCls,
                   ]"
                 >
                   {{ zone.code }}
                 </span>
-                <p class="text-xs font-bold text-[#0F172A]">{{ zone.name }}</p>
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-bold text-[#0F172A]">
+                    {{ zone.name }}
+                  </p>
+                  <p v-if="zone.deskripsi" class="truncate text-[10px] text-[#64748B]">
+                    {{ zone.deskripsi }}
+                  </p>
+                </div>
               </div>
 
               <div class="flex items-center gap-2.5 text-[11px]">
@@ -628,7 +787,11 @@ const goToPage = async (page) => {
           v-else
           class="mt-5 rounded-2xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] px-4 py-8 text-center text-[11.5px] text-[#64748B]"
         >
-          {{ isLoading ? 'Memuat data area parkir...' : 'Belum ada data area parkir di database.' }}
+          {{
+            isLoading
+              ? 'Memuat data area parkir...'
+              : 'Belum ada data area parkir di database.'
+          }}
         </div>
 
         <p class="mt-5 flex items-center gap-2 text-[10.5px] text-[#64748B]">
@@ -644,7 +807,9 @@ const goToPage = async (page) => {
           :transition="{ duration: 0.4, delay: 0.14 }"
           class="flex-1 rounded-[24px] border border-[#E2E8F0] bg-white p-6 shadow-2xs will-change-transform"
         >
-          <p class="text-[9.5px] font-bold tracking-[0.16em] text-olive">AKSI CEPAT ADMIN</p>
+          <p class="text-[9.5px] font-bold tracking-[0.16em] text-olive">
+            AKSI CEPAT ADMIN
+          </p>
           <h2 class="mt-1 text-sm font-bold text-[#0F172A]">Kelola Data Utama</h2>
           <p class="mt-1 text-[11px] text-[#64748B]">
             Akses cepat ke pengaturan inti sistem dan data master.
@@ -655,12 +820,12 @@ const goToPage = async (page) => {
               v-for="action in quickActions"
               :key="action.label"
               type="button"
-              @click="activeMenu = action.menuId"
+              @click="handleQuickAction(action)"
               :while-hover="{ x: 2 }"
               :while-press="{ scale: 0.98 }"
               :transition="{ type: 'spring', stiffness: 420, damping: 24 }"
               :class="[
-                'group flex w-full items-center justify-between rounded-full px-4 py-2.5 text-[11.5px] font-semibold transition-colors will-change-transform',
+                'group flex w-full cursor-pointer items-center justify-between rounded-full px-4 py-2.5 text-[11.5px] font-semibold transition-colors will-change-transform',
                 action.primary
                   ? 'bg-olive text-white hover:bg-olive-dark'
                   : 'border border-[#E2E8F0] bg-[#F8FAFC] text-[#334155] hover:border-olive/40 hover:bg-[#F4F8EA] hover:text-olive',
@@ -693,11 +858,18 @@ const goToPage = async (page) => {
           class="flex items-center justify-between rounded-[22px] bg-[#0B1105] px-6 py-4 text-white shadow-2xs will-change-transform"
         >
           <div>
-            <p class="text-[9.5px] font-bold tracking-[0.16em] text-[#D5EC96]">● STATUS SISTEM</p>
-            <p class="mt-1 text-base font-extrabold tracking-tight">API Terhubung</p>
+            <p class="text-[9.5px] font-bold tracking-[0.16em] text-[#D5EC96]">
+              ● SLOT TERSEDIA SAAT INI
+            </p>
+            <p class="mt-1 text-base font-extrabold tracking-tight">
+              {{ formatAngka(totalFreeSlots) }} Slot Kosong
+              <span class="ml-1 text-xs font-medium text-white/70">
+                ({{ occupancyPercentLabel }} terpakai)
+              </span>
+            </p>
           </div>
           <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-[#D5EC96]">
-            <Activity :size="19" />
+            <ParkingSquare :size="19" />
           </span>
         </motion.div>
       </div>
@@ -729,7 +901,7 @@ const goToPage = async (page) => {
             type="button"
             @click="activeLogFilter = tab.id"
             :class="[
-              'rounded-full px-3.5 py-1 font-semibold transition-colors',
+              'cursor-pointer rounded-full px-3.5 py-1 font-semibold transition-colors',
               activeLogFilter === tab.id
                 ? 'bg-olive text-white'
                 : 'text-[#64748B] hover:text-olive',
@@ -758,8 +930,10 @@ const goToPage = async (page) => {
               class="transition-colors hover:bg-[#F8FAFC]/80"
             >
               <td class="py-3.5 pr-4 align-middle">
-                <p class=" text-[11px] font-bold text-[#0F172A]">{{ row.time }}</p>
-                <p v-if="row.ago" class="mt-0.5 text-[9.5px] text-[#94A3B8]">{{ row.ago }}</p>
+                <p class="text-[11px] font-bold text-[#0F172A]">{{ row.time }}</p>
+                <p v-if="row.ago" class="mt-0.5 text-[9.5px] text-[#94A3B8]">
+                  {{ row.ago }}
+                </p>
               </td>
 
               <td class="py-3.5 pr-4 align-middle">
@@ -774,7 +948,9 @@ const goToPage = async (page) => {
                   </span>
                   <div>
                     <p class="font-bold text-[#0F172A]">{{ row.user }}</p>
-                    <p class="text-[9.5px] capitalize text-[#94A3B8]">{{ row.role }}</p>
+                    <p class="text-[9.5px] capitalize text-[#94A3B8]">
+                      {{ row.role }}
+                    </p>
                   </div>
                 </div>
               </td>
@@ -787,20 +963,29 @@ const goToPage = async (page) => {
                   >
                     {{ row.plate }}
                   </span>
-                  <p v-if="row.vehicle" class="mt-1 text-[10px] text-[#64748B]">{{ row.vehicle }}</p>
+                  <p v-if="row.vehicle" class="mt-1 text-[10px] text-[#64748B]">
+                    {{ row.vehicle }}
+                  </p>
                 </template>
-                <span v-else class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[9.5px] font-medium text-[#94A3B8]">
+                <span
+                  v-else
+                  class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[9.5px] font-medium text-[#94A3B8]"
+                >
                   -
                 </span>
               </td>
 
               <td class="py-3.5 pr-4 align-middle">
                 <p class="font-semibold text-[#0F172A]">{{ row.activity }}</p>
-                <p v-if="row.zone" class="mt-0.5 text-[10px] text-[#94A3B8]">{{ row.zone }}</p>
+                <p v-if="row.zone" class="mt-0.5 text-[10px] text-[#94A3B8]">
+                  {{ row.zone }}
+                </p>
               </td>
 
               <td class="py-3.5 text-right align-middle">
-                <p v-if="row.amount" class="mb-1 text-[11px] font-bold text-[#0F172A]">{{ row.amount }}</p>
+                <p v-if="row.amount" class="mb-1 text-[11px] font-bold text-[#0F172A]">
+                  {{ row.amount }}
+                </p>
                 <span
                   :class="[
                     'inline-block rounded-full px-2.5 py-0.5 text-[9.5px] font-bold',
@@ -815,7 +1000,11 @@ const goToPage = async (page) => {
           <tbody v-else>
             <tr>
               <td colspan="5" class="py-9 text-center text-[11.5px] text-[#64748B]">
-                {{ isLoading ? 'Memuat log aktivitas...' : 'Belum ada log aktivitas untuk ditampilkan.' }}
+                {{
+                  isLoading
+                    ? 'Memuat log aktivitas...'
+                    : 'Belum ada log aktivitas untuk ditampilkan.'
+                }}
               </td>
             </tr>
           </tbody>
