@@ -569,7 +569,7 @@ const handleDeleteUser = async () => {
             <tr class="border-b border-slate-100 text-[9.5px] font-bold tracking-wider text-[#94A3B8]">
               <th class="py-3 pr-4">PENGGUNA</th>
               <th class="py-3 pr-4">USERNAME</th>
-              <th class="py-3 pr-4">PERAN</th>
+              <th class="py-3 pr-4">ROLE</th>
               <th class="py-3 pr-4">STATUS</th>
               <th class="py-3 pr-4">TERDAFTAR</th>
               <th class="py-3 text-right">AKSI</th>
