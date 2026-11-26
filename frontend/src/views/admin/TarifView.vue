@@ -15,6 +15,8 @@ import {
   X,
   TrendingUp,
   Layers,
+  TicketX,
+  Save,
 } from 'lucide-vue-next'
 import { AnimatePresence, motion } from 'motion-v'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -60,7 +62,16 @@ const isSubmitting = ref(false)
 const deletingId = ref(null)
 const searchQuery = ref('')
 
-// Modal Form Tambah / Edit
+// Pengaturan Denda Karcis Hilang (tb_pengaturan_parkir)
+const isLoadingPengaturan = ref(false)
+const isSavingPengaturan = ref(false)
+const pengaturanError = ref('')
+const pengaturanForm = reactive({
+  denda_karcis_hilang: 25000,
+  skema_denda: 'tambahan',
+})
+
+// Modal Form Tambah / Edit Tarif
 const isModalOpen = ref(false)
 const editingTarifId = ref(null)
 const formError = ref('')
@@ -76,6 +87,7 @@ const tarifToDelete = ref(null)
 // Simulator Hitung Tarif
 const simTarifId = ref('')
 const simDurasiJam = ref(2)
+const simKarcisHilang = ref(false)
 
 // Toast Notifikasi
 const toast = reactive({
@@ -153,6 +165,68 @@ const fetchTarif = async () => {
   }
 }
 
+const fetchPengaturanParkir = async () => {
+  isLoadingPengaturan.value = true
+  pengaturanError.value = ''
+  try {
+    const { data } = await api.get('/admin/pengaturan-parkir')
+    const cfg = data?.data || data
+    if (cfg) {
+      pengaturanForm.denda_karcis_hilang = Number(cfg.denda_karcis_hilang ?? 25000)
+      pengaturanForm.skema_denda =
+        cfg.skema_denda === 'pengganti' ? 'pengganti' : 'tambahan'
+    }
+  } catch (err) {
+    pengaturanError.value =
+      err?.response?.data?.message || 'Gagal memuat pengaturan denda karcis hilang.'
+  } finally {
+    isLoadingPengaturan.value = false
+  }
+}
+
+const handleSavePengaturan = async () => {
+  pengaturanError.value = ''
+  const nominal = Number(pengaturanForm.denda_karcis_hilang)
+
+  if (Number.isNaN(nominal) || nominal < 0) {
+    pengaturanError.value = 'Nominal denda karcis hilang minimal Rp 0.'
+    return
+  }
+
+  if (!['tambahan', 'pengganti'].includes(pengaturanForm.skema_denda)) {
+    pengaturanError.value = 'Skema denda tidak valid.'
+    return
+  }
+
+  isSavingPengaturan.value = true
+  try {
+    const { data } = await api.put('/admin/pengaturan-parkir', {
+      denda_karcis_hilang: Math.round(nominal),
+      skema_denda: pengaturanForm.skema_denda,
+    })
+
+    const updated = data?.data
+    if (updated) {
+      pengaturanForm.denda_karcis_hilang = Number(updated.denda_karcis_hilang ?? nominal)
+      pengaturanForm.skema_denda =
+        updated.skema_denda === 'pengganti' ? 'pengganti' : 'tambahan'
+    }
+
+    showToast('Pengaturan denda karcis hilang berhasil disimpan.', 'success')
+  } catch (err) {
+    const resData = err?.response?.data
+    if (resData?.errors) {
+      const firstErr = Object.values(resData.errors).flat()[0]
+      pengaturanError.value = firstErr || resData?.message || 'Validasi gagal.'
+    } else {
+      pengaturanError.value =
+        resData?.message || 'Gagal menyimpan pengaturan denda.'
+    }
+  } finally {
+    isSavingPengaturan.value = false
+  }
+}
+
 const handleLogout = async () => {
   try {
     await api.post('/auth/logout')
@@ -178,7 +252,7 @@ onMounted(async () => {
       // Ditangani interceptor
     }
   }
-  await fetchTarif()
+  await Promise.all([fetchTarif(), fetchPengaturanParkir()])
 })
 
 // Statistik & KPI dari data real
@@ -220,7 +294,6 @@ const lastUpdatedText = computed(() => {
   }).format(latest)
 })
 
-// Visualisasi tinggi bar chart proporsional berdasarkan tarif tiap kategori
 const barChartItems = computed(() => {
   if (!tarifList.value.length) return []
   const maxVal = Math.max(
@@ -231,11 +304,13 @@ const barChartItems = computed(() => {
     id: t.id_tarif,
     label: getJenisMeta(t.jenis_kendaraan).label,
     value: Number(t.tarif_per_jam || 0),
-    heightPercent: Math.max(24, Math.round((Number(t.tarif_per_jam || 0) / maxVal) * 100)),
+    heightPercent: Math.max(
+      24,
+      Math.round((Number(t.tarif_per_jam || 0) / maxVal) * 100)
+    ),
   }))
 })
 
-// Pencarian kategori
 const filteredTarif = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return tarifList.value
@@ -250,7 +325,7 @@ const filteredTarif = computed(() => {
   })
 })
 
-// Simulator Hitung Tarif (per jam)
+// Simulator Hitung Tarif + Denda Karcis Hilang
 const selectedSimTarif = computed(
   () =>
     tarifList.value.find((t) => String(t.id_tarif) === String(simTarifId.value)) ||
@@ -258,11 +333,26 @@ const selectedSimTarif = computed(
     null
 )
 
-const simBilledHours = computed(() => Math.max(1, Math.ceil(Number(simDurasiJam.value) || 1)))
+const simBilledHours = computed(() =>
+  Math.max(1, Math.ceil(Number(simDurasiJam.value) || 1))
+)
 
-const simEstimatedTotal = computed(() => {
+const simBiayaParkirNormal = computed(() => {
   if (!selectedSimTarif.value) return 0
   return Number(selectedSimTarif.value.tarif_per_jam || 0) * simBilledHours.value
+})
+
+const simNominalDenda = computed(() => {
+  if (!simKarcisHilang.value) return 0
+  return Math.max(0, Number(pengaturanForm.denda_karcis_hilang || 0))
+})
+
+const simEstimatedTotal = computed(() => {
+  if (!simKarcisHilang.value) return simBiayaParkirNormal.value
+  if (pengaturanForm.skema_denda === 'pengganti') {
+    return simNominalDenda.value
+  }
+  return simBiayaParkirNormal.value + simNominalDenda.value
 })
 
 watch(tarifList, (list) => {
@@ -276,7 +366,9 @@ const openCreateModal = () => {
   editingTarifId.value = null
   formError.value = ''
 
-  const usedJenis = tarifList.value.map((t) => String(t.jenis_kendaraan).toLowerCase())
+  const usedJenis = tarifList.value.map((t) =>
+    String(t.jenis_kendaraan).toLowerCase()
+  )
   const available = JENIS_OPTIONS.find((opt) => !usedJenis.includes(opt.value))
   form.jenis_kendaraan = available ? available.value : 'motor'
   form.tarif_per_jam = ''
@@ -361,7 +453,8 @@ const handleDeleteTarif = async () => {
     await fetchTarif()
   } catch (err) {
     showToast(
-      err?.response?.data?.message || 'Gagal menghapus tarif. Pastikan tidak sedang dipakai transaksi.',
+      err?.response?.data?.message ||
+        'Gagal menghapus tarif. Pastikan tidak sedang dipakai transaksi.',
       'error'
     )
   } finally {
@@ -393,7 +486,11 @@ const handleDeleteTarif = async () => {
             : 'border-[#C7E182] bg-[#F4F8EA] text-[#3E4E14]',
         ]"
       >
-        <AlertCircle v-if="toast.type === 'error'" :size="15" class="shrink-0 text-rose-600" />
+        <AlertCircle
+          v-if="toast.type === 'error'"
+          :size="15"
+          class="shrink-0 text-rose-600"
+        />
         <CheckCircle2 v-else :size="15" class="shrink-0 text-olive" />
         <span>{{ toast.message }}</span>
       </motion.div>
@@ -414,7 +511,7 @@ const handleDeleteTarif = async () => {
           Kelola Skema Tarif Parkir
         </h1>
         <p class="mt-1 max-w-2xl text-[11.5px] text-[#64748B]">
-          Atur tarif parkir per jam untuk setiap jenis kendaraan (<span class="font-semibold text-[#334155]">Motor</span>, <span class="font-semibold text-[#334155]">Mobil</span>, dan <span class="font-semibold text-[#334155]">Lainnya</span>) secara real-time dan terintegrasi langsung ke perhitungan transaksi keluar.
+          Atur tarif parkir per jam untuk setiap jenis kendaraan (<span class="font-semibold text-[#334155]">Motor</span>, <span class="font-semibold text-[#334155]">Mobil</span>, dan <span class="font-semibold text-[#334155]">Lainnya</span>) serta kebijakan denda karcis hilang.
         </p>
       </div>
 
@@ -432,7 +529,6 @@ const handleDeleteTarif = async () => {
 
     <!-- Baris KPI: Metrik Finansial Operasional & Status Konfigurasi -->
     <div class="grid gap-5 lg:grid-cols-12">
-      <!-- Kartu Kiri: Metrik Rata-rata Tarif -->
       <motion.article
         :initial="{ opacity: 0, y: 12 }"
         :animate="{ opacity: 1, y: 0 }"
@@ -459,7 +555,6 @@ const handleDeleteTarif = async () => {
             </div>
           </div>
 
-          <!-- Mini Bar Visualisasi Perbandingan Tarif -->
           <div
             v-if="barChartItems.length > 0"
             class="flex h-14 items-end gap-2 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5"
@@ -496,7 +591,6 @@ const handleDeleteTarif = async () => {
         </p>
       </motion.article>
 
-      <!-- Kartu Kanan: Status Konfigurasi -->
       <motion.article
         :initial="{ opacity: 0, y: 12 }"
         :animate="{ opacity: 1, y: 0 }"
@@ -667,6 +761,95 @@ const handleDeleteTarif = async () => {
       </div>
     </motion.section>
 
+    <!-- Kebijakan Denda Karcis Hilang (tb_pengaturan_parkir) -->
+    <motion.section
+      :initial="{ opacity: 0, y: 14 }"
+      :animate="{ opacity: 1, y: 0 }"
+      :transition="{ duration: 0.38, delay: 0.13 }"
+      class="mt-6 rounded-[24px] border border-[#E2E8F0] bg-white p-6 shadow-2xs will-change-transform"
+    >
+      <div class="flex flex-col justify-between gap-2 border-b border-[#E2E8F0] pb-4 sm:flex-row sm:items-center">
+        <div class="flex items-start gap-3">
+          <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#F3E8E2] text-[#8C4A32]">
+            <TicketX :size="17" />
+          </span>
+          <div>
+            <h2 class="text-sm font-bold text-[#0F172A]">Kebijakan Denda Karcis Hilang</h2>
+            <p class="mt-0.5 text-[11px] text-[#64748B]">
+              Atur nominal denda dan skema penagihan saat pengunjung kehilangan karcis parkir saat keluar.
+            </p>
+          </div>
+        </div>
+
+        <span class="self-start rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1 text-[10px] font-bold text-[#475569] sm:self-center">
+          {{ isLoadingPengaturan ? 'Memuat...' : 'tb_pengaturan_parkir' }}
+        </span>
+      </div>
+
+      <form @submit.prevent="handleSavePengaturan" class="mt-5">
+        <p
+          v-if="pengaturanError"
+          class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700"
+        >
+          {{ pengaturanError }}
+        </p>
+
+        <div class="grid gap-4 md:grid-cols-12 md:items-end">
+          <div class="md:col-span-5">
+            <label class="mb-1.5 block text-[10px] font-bold tracking-wider text-[#475569]">
+              NOMINAL DENDA KARCIS HILANG (RUPIAH)
+            </label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748B]">
+                Rp
+              </span>
+              <input
+                v-model.number="pengaturanForm.denda_karcis_hilang"
+                type="number"
+                min="0"
+                step="500"
+                :disabled="isLoadingPengaturan || isSavingPengaturan"
+                class="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] py-2.5 pl-10 pr-4 text-xs font-bold text-[#0F172A] focus:border-olive focus:bg-white focus:outline-none disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          <div class="md:col-span-4">
+            <label class="mb-1.5 block text-[10px] font-bold tracking-wider text-[#475569]">
+              SKEMA PERHITUNGAN DENDA
+            </label>
+            <select
+              v-model="pengaturanForm.skema_denda"
+              :disabled="isLoadingPengaturan || isSavingPengaturan"
+              class="w-full cursor-pointer rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs font-semibold text-[#0F172A] focus:border-olive focus:bg-white focus:outline-none disabled:opacity-60"
+            >
+              <option value="tambahan">Tambahan (Biaya Parkir + Denda)</option>
+              <option value="pengganti">Pengganti (Hanya Bayar Denda)</option>
+            </select>
+          </div>
+
+          <div class="flex justify-end md:col-span-3">
+            <button
+              type="submit"
+              :disabled="isLoadingPengaturan || isSavingPengaturan"
+              class="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-olive px-5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-olive-dark disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+            >
+              <Save :size="14" />
+              <span>{{ isSavingPengaturan ? 'Menyimpan...' : 'Simpan Denda' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p class="mt-3 text-[10.5px] text-[#64748B]">
+          {{
+            pengaturanForm.skema_denda === 'pengganti'
+              ? `Skema Pengganti: Jika karcis hilang, pengunjung hanya membayar denda tetap sebesar ${formatRupiah(pengaturanForm.denda_karcis_hilang)}.`
+              : `Skema Tambahan: Jika karcis hilang, pengunjung membayar biaya parkir sesuai durasi ditambah denda ${formatRupiah(pengaturanForm.denda_karcis_hilang)}.`
+          }}
+        </p>
+      </form>
+    </motion.section>
+
     <!-- Simulator Hitung Tarif Real-time -->
     <motion.section
       :initial="{ opacity: 0, y: 14 }"
@@ -689,7 +872,7 @@ const handleDeleteTarif = async () => {
             Uji Estimasi Biaya Parkir
           </h3>
           <p class="mt-0.5 text-[11px] text-[#64748B]">
-            Simulasikan total tagihan pengunjung berdasarkan tarif per jam yang aktif di database dan durasi parkir.
+            Simulasikan total tagihan pengunjung berdasarkan tarif per jam aktif, durasi parkir, dan status karcis hilang.
           </p>
 
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -734,14 +917,49 @@ const handleDeleteTarif = async () => {
               </div>
             </div>
           </div>
+
+          <!-- Toggle Kondisi Karcis Hilang -->
+          <div class="mt-4 flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+            <div>
+              <p class="text-xs font-bold text-[#0F172A]">Kondisi Karcis Hilang</p>
+              <p class="text-[10.5px] text-[#64748B]">
+                Terapkan denda {{ formatRupiah(pengaturanForm.denda_karcis_hilang) }} (skema {{ pengaturanForm.skema_denda }})
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="simKarcisHilang"
+              @click="simKarcisHilang = !simKarcisHilang"
+              :class="[
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+                simKarcisHilang ? 'bg-rose-600' : 'bg-slate-300',
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs transition duration-200',
+                  simKarcisHilang ? 'translate-x-5' : 'translate-x-0',
+                ]"
+              />
+            </button>
+          </div>
         </div>
 
         <!-- Hasil Kalkulasi -->
         <div class="rounded-[20px] border border-[#E2E8F0] bg-[#F8FAFC] p-5 lg:col-span-5">
           <div class="flex items-center justify-between text-[9.5px] font-bold tracking-wider text-[#94A3B8]">
             <span>TOTAL ESTIMASI TAGIHAN</span>
-            <span class="rounded-full bg-white px-2.5 py-0.5 text-[#475569]">
-              PEMBULATAN KE ATAS
+            <span
+              :class="[
+                'rounded-full px-2.5 py-0.5 font-bold',
+                simKarcisHilang
+                  ? 'bg-rose-50 text-rose-700'
+                  : 'bg-white text-[#475569]',
+              ]"
+            >
+              {{ simKarcisHilang ? `DENDA (${pengaturanForm.skema_denda.toUpperCase()})` : 'NORMAL' }}
             </span>
           </div>
 
@@ -751,16 +969,19 @@ const handleDeleteTarif = async () => {
 
           <div class="mt-3 space-y-1 border-t border-[#E2E8F0] pt-3 text-[11px] text-[#64748B]">
             <p v-if="selectedSimTarif">
-              • Tarif dasar:
+              • Biaya parkir ({{ simBilledHours }} jam × {{ formatRupiah(selectedSimTarif.tarif_per_jam) }}):
               <span class="font-semibold text-[#0F172A]">
-                {{ formatRupiah(selectedSimTarif.tarif_per_jam) }} / jam
+                {{ formatRupiah(simBiayaParkirNormal) }}
               </span>
             </p>
-            <p>
-              • Durasi terhitung:
-              <span class="font-semibold text-[#0F172A]">
-                {{ simBilledHours }} jam × {{ selectedSimTarif ? formatRupiah(selectedSimTarif.tarif_per_jam) : 'Rp 0' }}
+            <p v-if="simKarcisHilang">
+              • Denda karcis hilang ({{ pengaturanForm.skema_denda }}):
+              <span class="font-bold text-rose-600">
+                {{ formatRupiah(simNominalDenda) }}
               </span>
+            </p>
+            <p v-else>
+              • Status karcis: <span class="font-semibold text-[#0F172A]">Normal (tanpa denda)</span>
             </p>
           </div>
         </div>
