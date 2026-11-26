@@ -32,6 +32,7 @@ class AreaParkirController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menambah area parkir {$area->nama_area} (kapasitas {$area->kapasitas})",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -92,6 +93,7 @@ class AreaParkirController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Mengubah area parkir {$area->nama_area}",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -126,6 +128,7 @@ class AreaParkirController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menghapus area parkir {$namaArea}",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 

@@ -12,6 +12,7 @@ class LogAktivitas extends Model
     protected $fillable = [
         'id_user',
         'aktivitas',
+        'status',
         'waktu_aktivitas',
     ];
 

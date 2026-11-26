@@ -49,4 +49,27 @@ class LogAktivitasController extends Controller
             'data' => $logs,
         ], 200);
     }
+
+    public function destroyBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:tb_log_aktivitas,id_log'],
+        ]);
+
+        $deletedCount = LogAktivitas::whereIn('id_log', $validated['ids'])->delete();
+
+        LogAktivitas::create([
+            'id_user' => auth('api')->id(),
+            'aktivitas' => "Menghapus {$deletedCount} data log aktivitas",
+            'status' => 'berhasil',
+            'waktu_aktivitas' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$deletedCount} log aktivitas berhasil dihapus",
+            'deleted_count' => $deletedCount,
+        ], 200);
+    }
 }

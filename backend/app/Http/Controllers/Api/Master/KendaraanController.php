@@ -32,6 +32,7 @@ class KendaraanController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menambah data kendaraan {$kendaraan->plat_nomor}",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -87,6 +88,7 @@ class KendaraanController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Mengubah data kendaraan {$kendaraan->plat_nomor}",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -114,6 +116,7 @@ class KendaraanController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menghapus data kendaraan {$plat}",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 

@@ -35,6 +35,7 @@ class UserController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menambah user {$user->username} ({$user->role})",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -95,6 +96,7 @@ class UserController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Mengubah data user {$user->username}",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -129,6 +131,7 @@ class UserController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menghapus user {$username}",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 

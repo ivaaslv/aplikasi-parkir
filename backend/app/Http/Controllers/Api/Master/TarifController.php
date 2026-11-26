@@ -29,6 +29,7 @@ class TarifController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menambah tarif {$tarif->jenis_kendaraan} ({$tarif->tarif_per_jam}/jam)",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -83,6 +84,7 @@ class TarifController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Mengubah tarif {$tarif->jenis_kendaraan} menjadi {$tarif->tarif_per_jam}/jam",
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -110,6 +112,7 @@ class TarifController extends Controller
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menghapus tarif {$jenis}",
+            'status' => 'berhasil', 
             'waktu_aktivitas' => now(),
         ]);
 

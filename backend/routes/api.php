@@ -26,6 +26,7 @@ Route::middleware(['auth:api', 'role:admin'])->prefix('admin')->group(function()
     Route::apiResource('area-parkir', AreaParkirController::class);
     Route::apiResource('kendaraan', KendaraanController::class);
     Route::get('log-aktivitas', [LogAktivitasController::class, 'index']);
+    Route::delete('log-aktivitas/bulk', [LogAktivitasController::class, 'destroyBulk']);
 });
 
 Route::middleware(['auth:api', 'role:admin, petugas'])->prefix('operasional')->group(function() {

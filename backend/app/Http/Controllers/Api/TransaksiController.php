@@ -172,6 +172,7 @@ class TransaksiController extends Controller
                 LogAktivitas::create([
                     'id_user' => auth('api')->id(),
                     'aktivitas' => "Parkir keluar {$platNomor} (Durasi {$durasiJam} jam, Biaya Rp {$biayaTotal})",
+                    'status' => 'berhasil',
                     'waktu_aktivitas' => now(),
                 ]);
 

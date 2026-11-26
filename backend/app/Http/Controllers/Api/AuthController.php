@@ -33,6 +33,7 @@ class AuthController extends Controller
         LogAktivitas::create([
             'id_user' => $user->id_user,
             'aktivitas' => 'Login ke Sistem',
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 
@@ -62,6 +63,7 @@ class AuthController extends Controller
             LogAktivitas::create([
                 'id_user' => $user->id_user,
                 'aktivitas' => 'Logout dari sistem',
+                'status' => 'berhasil',
                 'waktu_aktivitas' => now(),
             ]);
         }
