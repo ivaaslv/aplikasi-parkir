@@ -67,6 +67,12 @@ const routes = [
     component: () => import('../views/admin/KendaraanView.vue'),
     meta: { requiresAuth: true, role: 'admin', title: 'Kendaraan Management — ParkFlow' },
   },
+  {
+    path: '/admin/log-aktivitas',
+    name: 'admin-log-aktivitas',
+    component: () => import('../views/admin/LogAktivitasView.vue'),
+    meta: { requiresAuth: true, role: 'admin', title: 'Log Activity — ParkFlow' },
+  },
   // Aktifkan saat view petugas & owner sudah dibuat:
   // {
   //   path: '/petugas/dashboard',
