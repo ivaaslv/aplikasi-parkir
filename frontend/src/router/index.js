@@ -86,6 +86,18 @@ const routes = [
     component: () => import('../views/petugas/AreaParkirPetugasView.vue'),
     meta: { requiresAuth: true, role: 'petugas', title: 'Area Parkir Petugas — ParkFlow' },
   },
+  {
+    path: '/petugas/parkir-masuk',
+    name: 'petugas-parkir-masuk',
+    component: () => import('../views/petugas/ParkirMasukView.vue'),
+    meta: { requiresAuth: true, role: 'petugas', title: 'Parkir Masuk — ParkFlow' },
+  },
+  {
+    path: '/petugas/parkir-keluar',
+    name: 'petugas-parkir-keluar',
+    component: () => import('../views/petugas/ParkirKeluarView.vue'),
+    meta: { requiresAuth: true, role: 'petugas', title: 'Parkir Keluar — ParkFlow' },
+  },
   // {
   //   path: '/owner/dashboard',
   //   name: 'owner-dashboard',
