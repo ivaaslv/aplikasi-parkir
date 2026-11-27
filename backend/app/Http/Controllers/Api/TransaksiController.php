@@ -13,6 +13,7 @@ use App\Models\Tarif;
 use App\Models\Transaksi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TransaksiController extends Controller
 {
@@ -44,12 +45,18 @@ class TransaksiController extends Controller
 
         $plat = strtoupper(trim($validated['plat_nomor']));
         $jenis = strtolower(trim($validated['jenis_kendaraan']));
+        $warnaInput = isset($validated['warna']) && trim((string) $validated['warna']) !== ''
+            ? trim((string) $validated['warna'])
+            : '-';
+        $pemilikInput = isset($validated['pemilik']) && trim((string) $validated['pemilik']) !== ''
+            ? trim((string) $validated['pemilik'])
+            : 'Tamu Umum';
 
         $tarif = Tarif::whereRaw('LOWER(jenis_kendaraan) = ?', [$jenis])->first();
         if (! $tarif) {
             LogAktivitas::create([
                 'id_user' => auth('api')->id(),
-                'aktivitas' => "Gagal parkir masuk {$plat}: tarif kendaraan '{$jenis}' belum diatur",
+                'aktivitas' => Str::limit("Gagal masuk {$plat}: tarif '{$jenis}' belum diatur", 240, '...'),
                 'status' => 'gagal',
                 'waktu_aktivitas' => now(),
             ]);
@@ -61,8 +68,17 @@ class TransaksiController extends Controller
         }
 
         try {
-            $transaksi = DB::transaction(function () use ($validated, $plat, $jenis, $tarif) {
+            $transaksi = DB::transaction(function () use ($validated, $plat, $jenis, $warnaInput, $pemilikInput, $tarif) {
                 $area = AreaParkir::where('id_area', $validated['id_area'])->lockForUpdate()->first();
+
+                if (! $area) {
+                    throw new \RuntimeException('Area parkir tidak ditemukan');
+                }
+
+                $jenisArea = strtolower(trim((string) ($area->jenis_kendaraan ?? 'semua')));
+                if ($jenisArea !== '' && $jenisArea !== 'semua' && $jenisArea !== $jenis) {
+                    throw new \RuntimeException("Area {$area->nama_area} khusus untuk {$jenisArea}");
+                }
 
                 if ((int) $area->terisi >= (int) $area->kapasitas) {
                     throw new \RuntimeException('Kapasitas area parkir sudah penuh');
@@ -72,20 +88,16 @@ class TransaksiController extends Controller
                     ['plat_nomor' => $plat],
                     [
                         'jenis_kendaraan' => $jenis,
-                        'warna' => $validated['warna'] ?? null,
-                        'pemilik' => $validated['pemilik'] ?? null,
+                        'warna' => $warnaInput,
+                        'pemilik' => $pemilikInput,
                         'id_user' => auth('api')->id(),
                     ]
                 );
 
                 $kendaraan->update([
                     'jenis_kendaraan' => $jenis,
-                    'warna' => array_key_exists('warna', $validated) && $validated['warna'] !== null
-                        ? $validated['warna']
-                        : $kendaraan->warna,
-                    'pemilik' => array_key_exists('pemilik', $validated) && $validated['pemilik'] !== null
-                        ? $validated['pemilik']
-                        : $kendaraan->pemilik,
+                    'warna' => $warnaInput,
+                    'pemilik' => $pemilikInput,
                 ]);
 
                 $sudahMasuk = Transaksi::where('id_kendaraan', $kendaraan->id_kendaraan)
@@ -112,7 +124,7 @@ class TransaksiController extends Controller
 
                 LogAktivitas::create([
                     'id_user' => auth('api')->id(),
-                    'aktivitas' => "Parkir masuk {$plat} di {$area->nama_area}",
+                    'aktivitas' => Str::limit("Parkir masuk {$plat} di {$area->nama_area}", 240, '...'),
                     'status' => 'berhasil',
                     'waktu_aktivitas' => now(),
                 ]);
@@ -120,22 +132,32 @@ class TransaksiController extends Controller
                 return $transaksi->load(['kendaraan', 'tarif', 'areaParkir', 'user']);
             });
 
+            $noTransaksi = 'PRK-' . str_pad((string) $transaksi->id_parkir, 6, '0', STR_PAD_LEFT);
+            $dendaConfig = PengaturanParkir::first();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Transaksi parkir masuk berhasil dicatat',
+                'no_transaksi' => $noTransaksi,
+                'denda_karcis_hilang' => (float) ($dendaConfig->denda_karcis_hilang ?? 25000),
+                'skema_denda' => $dendaConfig->skema_denda ?? 'tambahan',
                 'data' => $transaksi,
             ], 201);
-        } catch (\RuntimeException $e) {
+        } catch (\Throwable $e) {
+            $alasanSingkat = $e instanceof \RuntimeException
+                ? $e->getMessage()
+                : 'Gagal memproses data kendaraan/transaksi';
+
             LogAktivitas::create([
                 'id_user' => auth('api')->id(),
-                'aktivitas' => "Gagal parkir masuk {$plat}: {$e->getMessage()}",
+                'aktivitas' => Str::limit("Gagal masuk {$plat}: {$alasanSingkat}", 240, '...'),
                 'status' => 'gagal',
                 'waktu_aktivitas' => now(),
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $alasanSingkat,
             ], 422);
         }
     }
@@ -145,15 +167,20 @@ class TransaksiController extends Controller
         $validated = $request->validated();
         $karcisHilang = (bool) $request->boolean('karcis_hilang');
 
+        $rawInput = trim((string) ($validated['kode_tiket'] ?? $validated['plat_nomor'] ?? ''));
+        $cleanCode = trim($rawInput, "* \t\n\r\0\x0B");
+
         try {
-            $transaksi = DB::transaction(function () use ($validated, $karcisHilang) {
+            $transaksi = DB::transaction(function () use ($validated, $karcisHilang, $cleanCode) {
                 $query = Transaksi::with(['kendaraan', 'tarif', 'areaParkir'])
                     ->where('status', 'masuk');
 
                 if (! empty($validated['id_parkir'])) {
-                    $query->where('id_parkir', $validated['id_parkir']);
+                    $query->where('id_parkir', (int) $validated['id_parkir']);
+                } elseif (preg_match('/^PRK-(\d+)$/i', $cleanCode, $matches)) {
+                    $query->where('id_parkir', (int) ltrim($matches[1], '0'));
                 } else {
-                    $plat = strtoupper(trim($validated['plat_nomor']));
+                    $plat = strtoupper($cleanCode);
                     $query->whereHas('kendaraan', function ($q) use ($plat) {
                         $q->where('plat_nomor', $plat);
                     });
@@ -205,7 +232,7 @@ class TransaksiController extends Controller
                 $catatanDenda = $karcisHilang ? ", Denda Rp {$biayaDenda}" : '';
                 LogAktivitas::create([
                     'id_user' => auth('api')->id(),
-                    'aktivitas' => "Parkir keluar {$platNomor} (Durasi {$durasiJam} jam{$catatanDenda}, Total Rp {$biayaTotal})",
+                    'aktivitas' => Str::limit("Keluar {$platNomor} ({$durasiJam}j{$catatanDenda}, Rp {$biayaTotal})", 240, '...'),
                     'status' => 'berhasil',
                     'waktu_aktivitas' => now(),
                 ]);
@@ -216,23 +243,27 @@ class TransaksiController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Transaksi parkir keluar berhasil diproses',
+                'no_transaksi' => 'PRK-' . str_pad((string) $transaksi->id_parkir, 6, '0', STR_PAD_LEFT),
                 'data' => $transaksi,
             ], 200);
-        } catch (\RuntimeException $e) {
+        } catch (\Throwable $e) {
             $identitas = ! empty($validated['id_parkir'])
                 ? "ID #{$validated['id_parkir']}"
-                : strtoupper(trim($validated['plat_nomor'] ?? '-'));
+                : ($cleanCode !== '' ? strtoupper($cleanCode) : '-');
+            $alasanSingkat = $e instanceof \RuntimeException
+                ? $e->getMessage()
+                : 'Gagal memproses transaksi keluar';
 
             LogAktivitas::create([
                 'id_user' => auth('api')->id(),
-                'aktivitas' => "Gagal parkir keluar ({$identitas}): {$e->getMessage()}",
+                'aktivitas' => Str::limit("Gagal keluar ({$identitas}): {$alasanSingkat}", 240, '...'),
                 'status' => 'gagal',
                 'waktu_aktivitas' => now(),
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $alasanSingkat,
             ], 422);
         }
     }

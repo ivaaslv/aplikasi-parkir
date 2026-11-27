@@ -14,18 +14,33 @@ class TransaksiKeluarRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id_parkir' => ['nullable', 'integer', 'exists:tb_transaksi,id_parkir', 'required_without:plat_nomor'],
-            'plat_nomor' => ['nullable', 'string', 'max:20', 'required_without:id_parkir'],
+            'id_parkir' => ['nullable', 'integer', 'exists:tb_transaksi,id_parkir'],
+            'kode_tiket' => ['nullable', 'string', 'max:40'],
+            'plat_nomor' => ['nullable', 'string', 'max:40'],
             'karcis_hilang' => ['nullable', 'boolean'],
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $hasId = $this->filled('id_parkir');
+            $hasKode = $this->filled('kode_tiket');
+            $hasPlat = $this->filled('plat_nomor');
+
+            if (! $hasId && ! $hasKode && ! $hasPlat) {
+                $validator->errors()->add(
+                    'plat_nomor',
+                    'Scan barcode tiket atau masukkan nomor tiket / plat nomor kendaraan yang keluar.'
+                );
+            }
+        });
     }
 
     public function messages(): array
     {
         return [
             'id_parkir.exists' => 'Data transaksi parkir tidak ditemukan.',
-            'id_parkir.required_without' => 'Isi id_parkir atau plat_nomor kendaraan yang keluar.',
-            'plat_nomor.required_without' => 'Isi plat_nomor atau id_parkir kendaraan yang keluar.',
         ];
     }
 }
