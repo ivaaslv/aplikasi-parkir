@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Master\UserRequest;
 use App\Models\LogAktivitas;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
@@ -68,6 +69,13 @@ class UserController extends Controller
         $user = User::find($id);
 
         if (! $user) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal mengubah user (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'User tidak ditemukan',
@@ -112,6 +120,13 @@ class UserController extends Controller
         $user = User::find($id);
 
         if (! $user) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus user (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'User tidak ditemukan',
@@ -119,6 +134,13 @@ class UserController extends Controller
         }
 
         if ((int) $user->id_user === (int) auth('api')->id()) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus user {$user->username}: tidak dapat menghapus akun sendiri",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Tidak bisa menghapus akun sendiri yang sedang login',
@@ -126,7 +148,22 @@ class UserController extends Controller
         }
 
         $username = $user->username;
-        $user->delete();
+
+        try {
+            $user->delete();
+        } catch (QueryException $e) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus user {$username}: masih terhubung dengan data transaksi/kendaraan",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'User tidak dapat dihapus karena masih terhubung dengan riwayat data sistem',
+            ], 409);
+        }
 
         LogAktivitas::create([
             'id_user' => auth('api')->id(),

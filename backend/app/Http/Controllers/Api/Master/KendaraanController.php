@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Master\KendaraanRequest;
 use App\Models\Kendaraan;
 use App\Models\LogAktivitas;
+use App\Models\Transaksi;
+use Illuminate\Database\QueryException;
 
 class KendaraanController extends Controller
 {
@@ -65,6 +67,13 @@ class KendaraanController extends Controller
         $kendaraan = Kendaraan::find($id);
 
         if (! $kendaraan) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal mengubah kendaraan (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Data kendaraan tidak ditemukan',
@@ -104,6 +113,13 @@ class KendaraanController extends Controller
         $kendaraan = Kendaraan::find($id);
 
         if (! $kendaraan) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus kendaraan (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Data kendaraan tidak ditemukan',
@@ -111,7 +127,39 @@ class KendaraanController extends Controller
         }
 
         $plat = $kendaraan->plat_nomor;
-        $kendaraan->delete();
+        $sedangParkir = Transaksi::where('id_kendaraan', $kendaraan->id_kendaraan)
+            ->where('status', 'masuk')
+            ->exists();
+
+        if ($sedangParkir) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus kendaraan {$plat}: masih berstatus parkir aktif",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Kendaraan tidak bisa dihapus karena masih berada di dalam area parkir',
+            ], 400);
+        }
+
+        try {
+            $kendaraan->delete();
+        } catch (QueryException $e) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus kendaraan {$plat}: masih terhubung dengan riwayat transaksi",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Data kendaraan tidak dapat dihapus karena masih memiliki riwayat transaksi',
+            ], 409);
+        }
 
         LogAktivitas::create([
             'id_user' => auth('api')->id(),

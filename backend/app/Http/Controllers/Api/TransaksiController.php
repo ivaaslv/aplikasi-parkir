@@ -47,6 +47,13 @@ class TransaksiController extends Controller
 
         $tarif = Tarif::whereRaw('LOWER(jenis_kendaraan) = ?', [$jenis])->first();
         if (! $tarif) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal parkir masuk {$plat}: tarif kendaraan '{$jenis}' belum diatur",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => "Tarif untuk jenis kendaraan '{$jenis}' belum diatur",
@@ -106,6 +113,7 @@ class TransaksiController extends Controller
                 LogAktivitas::create([
                     'id_user' => auth('api')->id(),
                     'aktivitas' => "Parkir masuk {$plat} di {$area->nama_area}",
+                    'status' => 'berhasil',
                     'waktu_aktivitas' => now(),
                 ]);
 
@@ -118,6 +126,13 @@ class TransaksiController extends Controller
                 'data' => $transaksi,
             ], 201);
         } catch (\RuntimeException $e) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal parkir masuk {$plat}: {$e->getMessage()}",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -204,6 +219,17 @@ class TransaksiController extends Controller
                 'data' => $transaksi,
             ], 200);
         } catch (\RuntimeException $e) {
+            $identitas = ! empty($validated['id_parkir'])
+                ? "ID #{$validated['id_parkir']}"
+                : strtoupper(trim($validated['plat_nomor'] ?? '-'));
+
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal parkir keluar ({$identitas}): {$e->getMessage()}",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -234,6 +260,8 @@ class TransaksiController extends Controller
                 'waktu_keluar' => $transaksi->waktu_keluar,
                 'durasi_jam' => $transaksi->durasi_jam,
                 'tarif_per_jam' => $transaksi->tarif->tarif_per_jam ?? 0,
+                'biaya_denda' => $transaksi->biaya_denda ?? 0,
+                'karcis_hilang' => (bool) $transaksi->karcis_hilang,
                 'biaya_total' => $transaksi->biaya_total,
                 'petugas' => $transaksi->user->nama_lengkap ?? null,
             ],

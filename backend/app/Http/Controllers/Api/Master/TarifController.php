@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Master\TarifRequest;
 use App\Models\LogAktivitas;
 use App\Models\Tarif;
+use Illuminate\Database\QueryException;
 
 class TarifController extends Controller
 {
@@ -62,6 +63,13 @@ class TarifController extends Controller
         $tarif = Tarif::find($id);
 
         if (! $tarif) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal mengubah tarif (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Tarif tidak ditemukan',
@@ -100,6 +108,13 @@ class TarifController extends Controller
         $tarif = Tarif::find($id);
 
         if (! $tarif) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus tarif (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Tarif tidak ditemukan',
@@ -107,12 +122,27 @@ class TarifController extends Controller
         }
 
         $jenis = $tarif->jenis_kendaraan;
-        $tarif->delete();
+
+        try {
+            $tarif->delete();
+        } catch (QueryException $e) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus tarif {$jenis}: masih digunakan pada data transaksi",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Tarif tidak dapat dihapus karena masih digunakan pada riwayat transaksi',
+            ], 409);
+        }
 
         LogAktivitas::create([
             'id_user' => auth('api')->id(),
             'aktivitas' => "Menghapus tarif {$jenis}",
-            'status' => 'berhasil', 
+            'status' => 'berhasil',
             'waktu_aktivitas' => now(),
         ]);
 

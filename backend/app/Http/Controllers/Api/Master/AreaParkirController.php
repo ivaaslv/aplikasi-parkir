@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Master\AreaParkirRequest;
 use App\Models\AreaParkir;
 use App\Models\LogAktivitas;
+use Illuminate\Database\QueryException;
 
 class AreaParkirController extends Controller
 {
@@ -65,6 +66,13 @@ class AreaParkirController extends Controller
         $area = AreaParkir::find($id);
 
         if (! $area) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal mengubah area parkir (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Area parkir tidak ditemukan',
@@ -76,6 +84,13 @@ class AreaParkirController extends Controller
         $terisiBaru = isset($validated['terisi']) ? (int) $validated['terisi'] : (int) $area->terisi;
 
         if ($terisiBaru > $kapasitasBaru) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal mengubah area {$area->nama_area}: slot terisi ({$terisiBaru}) melebihi kapasitas ({$kapasitasBaru})",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Jumlah slot terisi tidak boleh melebihi kapasitas area',
@@ -109,6 +124,13 @@ class AreaParkirController extends Controller
         $area = AreaParkir::find($id);
 
         if (! $area) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus area parkir (ID #{$id} tidak ditemukan)",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Area parkir tidak ditemukan',
@@ -116,6 +138,13 @@ class AreaParkirController extends Controller
         }
 
         if ((int) $area->terisi > 0) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus area {$area->nama_area}: masih ada {$area->terisi} slot terisi",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Area parkir tidak bisa dihapus karena masih ada slot terisi',
@@ -123,7 +152,22 @@ class AreaParkirController extends Controller
         }
 
         $namaArea = $area->nama_area;
-        $area->delete();
+
+        try {
+            $area->delete();
+        } catch (QueryException $e) {
+            LogAktivitas::create([
+                'id_user' => auth('api')->id(),
+                'aktivitas' => "Gagal menghapus area {$namaArea}: masih terhubung dengan riwayat transaksi",
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Area parkir tidak dapat dihapus karena masih digunakan pada data transaksi',
+            ], 409);
+        }
 
         LogAktivitas::create([
             'id_user' => auth('api')->id(),

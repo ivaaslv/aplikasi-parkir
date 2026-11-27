@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\LogAktivitas;
+use App\Models\User;
 
 class AuthController extends Controller
 {
@@ -13,6 +14,17 @@ class AuthController extends Controller
         $credentials = $request->validated();
 
         if (! $token = auth('api')->attempt($credentials)) {
+            $existingUser = User::where('username', $credentials['username'] ?? '')->first();
+
+            if ($existingUser) {
+                LogAktivitas::create([
+                    'id_user' => $existingUser->id_user,
+                    'aktivitas' => "Gagal login ke sistem (password salah)",
+                    'status' => 'gagal',
+                    'waktu_aktivitas' => now(),
+                ]);
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Username atau password salah',
@@ -22,6 +34,13 @@ class AuthController extends Controller
         $user = auth('api')->user();
 
         if ((int) $user->status_aktif !== 1) {
+            LogAktivitas::create([
+                'id_user' => $user->id_user,
+                'aktivitas' => 'Gagal login ke sistem (akun tidak aktif)',
+                'status' => 'gagal',
+                'waktu_aktivitas' => now(),
+            ]);
+
             auth('api')->logout();
 
             return response()->json([

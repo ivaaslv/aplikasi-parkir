@@ -5,10 +5,10 @@ use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\LogAktivitasController;
 use App\Http\Controllers\Api\Master\AreaParkirController;
 use App\Http\Controllers\Api\Master\KendaraanController;
+use App\Http\Controllers\Api\Master\PengaturanParkirController;
 use App\Http\Controllers\Api\Master\TarifController;
 use App\Http\Controllers\Api\Master\UserController;
 use App\Http\Controllers\Api\TransaksiController;
-use App\Http\Controllers\Api\Master\PengaturanParkirController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -21,7 +21,7 @@ Route::prefix('auth')->group(function () {
     });
 });
 
-Route::middleware(['auth:api', 'role:admin'])->prefix('admin')->group(function() {
+Route::middleware(['auth:api', 'role:admin'])->prefix('admin')->group(function () {
     Route::apiResource('users', UserController::class);
     Route::apiResource('tarif', TarifController::class);
     Route::apiResource('area-parkir', AreaParkirController::class);
@@ -32,7 +32,9 @@ Route::middleware(['auth:api', 'role:admin'])->prefix('admin')->group(function()
     Route::put('pengaturan-parkir', [PengaturanParkirController::class, 'update']);
 });
 
-Route::middleware(['auth:api', 'role:admin, petugas'])->prefix('operasional')->group(function() {
+Route::middleware(['auth:api', 'role:admin,petugas'])->prefix('operasional')->group(function () {
+    Route::get('area-parkir', [AreaParkirController::class, 'index']);
+    Route::get('tarif', [TarifController::class, 'index']);
     Route::get('transaksi', [TransaksiController::class, 'index']);
     Route::post('transaksi/masuk', [TransaksiController::class, 'masuk']);
     Route::post('transaksi/keluar', [TransaksiController::class, 'keluar']);
@@ -40,6 +42,6 @@ Route::middleware(['auth:api', 'role:admin, petugas'])->prefix('operasional')->g
     Route::get('pengaturan-parkir', [PengaturanParkirController::class, 'show']);
 });
 
-Route::middleware(['auth:api', 'role:admin, owner'])->prefix('laporan')->group(function() {
+Route::middleware(['auth:api', 'role:admin,owner'])->prefix('laporan')->group(function () {
     Route::get('pendapatan', [LaporanController::class, 'pendapatan']);
 });
