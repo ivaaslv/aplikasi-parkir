@@ -1,6 +1,5 @@
 <script setup>
 import {
-  Leaf,
   LayoutGrid,
   Users,
   Tag,
@@ -18,8 +17,10 @@ import {
   X,
   Car,
 } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+
+const SIDEBAR_SCROLL_KEY = 'parkflow_sidebar_scroll_top'
 
 const props = defineProps({
   collapsed: { type: Boolean, default: false },
@@ -34,6 +35,7 @@ const emit = defineEmits(['close-mobile', 'select-menu', 'logout'])
 const route = useRoute()
 const router = useRouter()
 
+const navRef = ref(null)
 const lockedToast = ref('')
 let toastTimer = null
 
@@ -65,6 +67,7 @@ const menuGroups = [
     allowedRoles: ['petugas'],
     items: [
       { id: 'dashboard-petugas', label: 'Dashboard Petugas', to: '/petugas/dashboard', icon: ClipboardList },
+      { id: 'area-parkir-petugas', label: 'Area Parkir Petugas', to: '/petugas/area-parkir', icon: SquareParking },
       { id: 'parkir-masuk', label: 'Parkir Masuk', to: '/petugas/parkir-masuk', icon: LogIn },
       { id: 'parkir-keluar', label: 'Parkir Keluar & Scan', to: '/petugas/parkir-keluar', icon: QrCode },
       { id: 'daftar-transaksi', label: 'Daftar Transaksi', to: '/petugas/transaksi', icon: ReceiptText },
@@ -119,6 +122,20 @@ const isItemActive = (item) => {
   return route.path === item.to || route.path.startsWith(`${item.to}/`)
 }
 
+const saveSidebarScroll = () => {
+  if (!navRef.value) return
+  localStorage.setItem(SIDEBAR_SCROLL_KEY, String(navRef.value.scrollTop))
+}
+
+const restoreSidebarScroll = async () => {
+  await nextTick()
+  if (!navRef.value) return
+  const savedTop = Number(localStorage.getItem(SIDEBAR_SCROLL_KEY) || 0)
+  if (!Number.isNaN(savedTop)) {
+    navRef.value.scrollTop = savedTop
+  }
+}
+
 const handleLockedClick = (item) => {
   lockedToast.value = `Menu "${item.label}" terkunci untuk role ${roleLabel.value}.`
   clearTimeout(toastTimer)
@@ -128,12 +145,24 @@ const handleLockedClick = (item) => {
 }
 
 const handleNavigate = (item) => {
+  saveSidebarScroll()
   emit('select-menu', item.id)
   emit('close-mobile')
   if (route.path !== item.to) {
     router.push(item.to)
   }
 }
+
+watch(
+  () => [route.path, props.collapsed],
+  () => {
+    restoreSidebarScroll()
+  }
+)
+
+onMounted(() => {
+  restoreSidebarScroll()
+})
 </script>
 
 <template>
@@ -208,7 +237,11 @@ const handleNavigate = (item) => {
     </Transition>
 
     <!-- Menu List -->
-    <nav class="no-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-3.5 py-4">
+    <nav
+      ref="navRef"
+      @scroll="saveSidebarScroll"
+      class="no-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-3.5 py-4"
+    >
       <div v-for="group in menuGroups" :key="group.id">
         <div
           v-if="!collapsed"

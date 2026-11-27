@@ -74,12 +74,18 @@ const routes = [
     meta: { requiresAuth: true, role: 'admin', title: 'Log Activity — ParkFlow' },
   },
   // Aktifkan saat view petugas & owner sudah dibuat:
-  // {
-  //   path: '/petugas/dashboard',
-  //   name: 'petugas-dashboard',
-  //   component: () => import('../views/petugas/PetugasDashboardView.vue'),
-  //   meta: { requiresAuth: true, role: 'petugas', title: 'Dashboard Petugas — ParkFlow' },
-  // },
+  {
+    path: '/petugas/dashboard',
+    name: 'petugas-dashboard',
+    component: () => import('../views/petugas/DashboardPetugasView.vue'),
+    meta: { requiresAuth: true, role: 'petugas', title: 'Dashboard Petugas — ParkFlow' },
+  },
+  {
+    path: '/petugas/area-parkir',
+    name: 'petugas-area-parkir',
+    component: () => import('../views/petugas/AreaParkirPetugasView.vue'),
+    meta: { requiresAuth: true, role: 'petugas', title: 'Area Parkir Petugas — ParkFlow' },
+  },
   // {
   //   path: '/owner/dashboard',
   //   name: 'owner-dashboard',
