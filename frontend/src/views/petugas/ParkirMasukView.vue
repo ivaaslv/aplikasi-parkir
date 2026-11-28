@@ -12,6 +12,8 @@ import {
   AlertCircle,
   Clock,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -28,11 +30,14 @@ const activeMenu = ref('parkir-masuk')
 
 const platInputRef = ref(null)
 const barcodeSvgRef = ref(null)
+
 const platNomor = ref('')
-const selectedJenis = ref('')
+const selectedTarifJenis = ref('')
+const detailJenisKendaraan = ref('')
 const selectedAreaId = ref('')
 const warnaKendaraan = ref('')
 const namaPengemudi = ref('')
+const showOptionalFields = ref(false)
 
 const tarifsRaw = ref([])
 const areasRaw = ref([])
@@ -44,6 +49,13 @@ const isLoadingData = ref(false)
 const feedbackError = ref('')
 const feedbackSuccess = ref('')
 const lastCreatedTicket = ref(null)
+
+const DETAIL_PRESETS = {
+  motor: ['Matic', 'Bebek', 'Sport', 'Trail / Cruiser'],
+  mobil: ['MPV', 'SUV', 'City Car / Hatchback', 'Sedan', 'Pickup'],
+  box: ['Blind Van', 'Truk Box Kecil', 'Truk Engkel', 'Tronton'],
+  vip: ['VIP Car', 'Valet Sedan', 'Valet SUV'],
+}
 
 const extractList = (payload) => {
   if (Array.isArray(payload)) return payload
@@ -100,7 +112,7 @@ const petugasNama = computed(
 const kategoriTarifList = computed(() =>
   tarifsRaw.value.map((t, idx) => {
     const jenis = String(t.jenis_kendaraan || '').toLowerCase()
-    let subLabel = 'Kendaraan'
+    let subLabel = 'Tarif Jam'
     let icon = Car
 
     if (jenis.includes('motor') || jenis.includes('roda 2')) {
@@ -128,9 +140,17 @@ const kategoriTarifList = computed(() =>
   })
 )
 
-const activeTarifObj = computed(() =>
-  kategoriTarifList.value.find((k) => k.jenis === selectedJenis.value) || null
+const activeTarifObj = computed(
+  () => kategoriTarifList.value.find((k) => k.jenis === selectedTarifJenis.value) || null
 )
+
+const detailPresetsForActiveTarif = computed(() => {
+  const key = String(selectedTarifJenis.value || '').toLowerCase()
+  for (const [groupKey, list] of Object.entries(DETAIL_PRESETS)) {
+    if (key.includes(groupKey)) return list
+  }
+  return ['Standar', 'Niaga / Operasional', 'Khusus']
+})
 
 const areaOptions = computed(() =>
   areasRaw.value.map((a, idx) => {
@@ -139,9 +159,9 @@ const areaOptions = computed(() =>
     const sisa = Math.max(0, total - used)
     const jenisArea = String(a.jenis_kendaraan || 'semua').toLowerCase()
     const cocokJenis =
-      !selectedJenis.value ||
+      !selectedTarifJenis.value ||
       jenisArea === 'semua' ||
-      jenisArea === selectedJenis.value
+      jenisArea === selectedTarifJenis.value
 
     return {
       id: a.id_area ?? a.id ?? idx,
@@ -177,29 +197,44 @@ const autoPickBestArea = () => {
   }
 }
 
-watch(selectedJenis, () => {
+watch(selectedTarifJenis, () => {
   if (selectedAreaObj.value && (!selectedAreaObj.value.cocokJenis || selectedAreaObj.value.penuh)) {
     autoPickBestArea()
   }
 })
 
+watch(platNomor, (val) => {
+  const cleaned = String(val || '').toUpperCase().replace(/\s{2,}/g, ' ')
+  if (cleaned !== val) {
+    platNomor.value = cleaned
+  }
+})
+
 const masukTerakhirList = computed(() =>
-  transactionsRaw.value.slice(0, 3).map((trx, idx) => ({
-    id: trx.id_parkir ?? trx.id ?? idx,
-    plat: String(trx.kendaraan?.plat_nomor || '-').toUpperCase(),
-    jenis: String(trx.kendaraan?.jenis_kendaraan || 'kendaraan').toUpperCase(),
-    area: trx.area_parkir?.nama_area || trx.areaParkir?.nama_area || 'Area Parkir',
-    jam: formatJamDetik(trx.waktu_masuk),
-    noTiket: `Tiket #${String(trx.id_parkir ?? idx + 1).padStart(3, '0')}`,
-  }))
+  transactionsRaw.value.slice(0, 3).map((trx, idx) => {
+    const tipeDetail = trx.kendaraan?.tipe_kendaraan || trx.kendaraan?.jenis_kendaraan || 'kendaraan'
+    return {
+      id: trx.id_parkir ?? trx.id ?? idx,
+      plat: String(trx.kendaraan?.plat_nomor || '-').toUpperCase(),
+      jenis: String(tipeDetail).toUpperCase(),
+      area: trx.area_parkir?.nama_area || trx.areaParkir?.nama_area || 'Area Parkir',
+      jam: formatJamDetik(trx.waktu_masuk),
+      noTiket: `Tiket #${String(trx.id_parkir ?? idx + 1).padStart(3, '0')}`,
+    }
+  })
 )
 
 const previewTicket = computed(() => {
   if (lastCreatedTicket.value) return lastCreatedTicket.value
+  const detailText =
+    normalizeOptionalText(detailJenisKendaraan.value) ||
+    (selectedTarifJenis.value || 'MOBIL').toUpperCase()
+
   return {
     noTransaksi: 'PRK-000000',
     plat: platNomor.value.trim().toUpperCase() || 'B 1234 XYZ',
-    jenis: (selectedJenis.value || 'mobil').toUpperCase(),
+    jenis: detailText.toUpperCase(),
+    tarifLabel: (selectedTarifJenis.value || 'MOBIL').toUpperCase(),
     area: selectedAreaObj.value?.namaArea || 'Area Parkir',
     waktuMasuk: new Date().toISOString(),
     tarifPerJam: activeTarifObj.value?.tarifPerJam ?? 0,
@@ -250,8 +285,8 @@ const fetchInitialData = async () => {
 
     if (tarifRes.status === 'fulfilled') {
       tarifsRaw.value = extractList(tarifRes.value.data)
-      if (!selectedJenis.value && tarifsRaw.value.length > 0) {
-        selectedJenis.value = String(tarifsRaw.value[0].jenis_kendaraan || '').toLowerCase()
+      if (!selectedTarifJenis.value && tarifsRaw.value.length > 0) {
+        selectedTarifJenis.value = String(tarifsRaw.value[0].jenis_kendaraan || '').toLowerCase()
       }
     }
 
@@ -279,6 +314,7 @@ const focusPlatInput = () => {
 
 const resetForm = async (clearTicket = false) => {
   platNomor.value = ''
+  detailJenisKendaraan.value = ''
   warnaKendaraan.value = ''
   namaPengemudi.value = ''
   feedbackError.value = ''
@@ -307,8 +343,8 @@ const handleSubmitMasuk = async () => {
     return
   }
 
-  if (!selectedJenis.value) {
-    feedbackError.value = 'Pilih kategori & tarif parkir terlebih dahulu.'
+  if (!selectedTarifJenis.value) {
+    feedbackError.value = 'Pilih kategori tarif parkir terlebih dahulu.'
     return
   }
 
@@ -317,6 +353,7 @@ const handleSubmitMasuk = async () => {
     return
   }
 
+  const cleanDetailJenis = normalizeOptionalText(detailJenisKendaraan.value)
   const cleanWarna = normalizeOptionalText(warnaKendaraan.value)
   const cleanPemilik = normalizeOptionalText(namaPengemudi.value)
 
@@ -324,7 +361,8 @@ const handleSubmitMasuk = async () => {
   try {
     const { data } = await api.post('/operasional/transaksi/masuk', {
       plat_nomor: platClean,
-      jenis_kendaraan: selectedJenis.value,
+      jenis_kendaraan: selectedTarifJenis.value,
+      detail_jenis_kendaraan: cleanDetailJenis || null,
       id_area: Number(selectedAreaId.value),
       warna: cleanWarna || null,
       pemilik: cleanPemilik || null,
@@ -337,10 +375,17 @@ const handleSubmitMasuk = async () => {
         ? `PRK-${String(created.id_parkir).padStart(6, '0')}`
         : 'PRK-000001')
 
+    const labelKendaraan =
+      cleanDetailJenis ||
+      created?.kendaraan?.detail_jenis_kendaraan ||
+      created?.kendaraan?.jenis_kendaraan ||
+      selectedTarifJenis.value
+
     lastCreatedTicket.value = {
       noTransaksi: noTiket,
       plat: created?.kendaraan?.plat_nomor || platClean,
-      jenis: String(created?.kendaraan?.jenis_kendaraan || selectedJenis.value).toUpperCase(),
+      jenis: String(labelKendaraan).toUpperCase(),
+      tarifLabel: selectedTarifJenis.value.toUpperCase(),
       area:
         created?.area_parkir?.nama_area ||
         created?.areaParkir?.nama_area ||
@@ -360,12 +405,13 @@ const handleSubmitMasuk = async () => {
 
     feedbackSuccess.value = 'Transaksi masuk tersimpan. Siap dicetak / disimpan PDF.'
     platNomor.value = ''
+    detailJenisKendaraan.value = ''
     warnaKendaraan.value = ''
     namaPengemudi.value = ''
 
-    await fetchInitialData()
     await triggerPrintNow()
     focusPlatInput()
+    fetchInitialData()
   } catch (err) {
     const apiMsg =
       err?.response?.data?.message ||
@@ -434,7 +480,6 @@ onBeforeUnmount(() => {
   >
     <div class="no-print mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[#E2E8F0] bg-white px-5 py-3 shadow-2xs">
       <div class="flex flex-wrap items-center gap-3 text-xs">
-
         <span class="text-[11px] font-semibold text-[#475569]">
           Kendaraan Masuk • Label 56×46mm
         </span>
@@ -491,12 +536,13 @@ onBeforeUnmount(() => {
         </p>
 
         <form @submit.prevent="handleSubmitMasuk" class="mt-5 space-y-5">
+          <!-- 1. Plat Nomor -->
           <div>
             <div class="flex items-center justify-between text-xs">
               <label for="plat_nomor" class="font-bold text-[#0F172A]">
                 Nomor Polisi Kendaraan <span class="text-rose-600">*</span>
               </label>
-              <span class="text-[10.5px] font-medium text-[#94A3B8]">Wajib Diisi</span>
+              <span class="text-[10.5px] font-medium text-[#94A3B8]">Wajib Diisi • Otomatis Kapital</span>
             </div>
             <input
               id="plat_nomor"
@@ -509,21 +555,22 @@ onBeforeUnmount(() => {
             />
           </div>
 
+          <!-- 2. Kategori Tarif Parkir (Khusus Tarif) -->
           <div>
             <div class="flex items-center justify-between text-xs">
-              <span class="font-bold text-[#0F172A]">Kategori &amp; Tarif Parkir</span>
-              <span class="text-[10.5px] text-[#94A3B8]">Pilih jenis tarif yang sesuai</span>
+              <span class="font-bold text-[#0F172A]">Kategori Tarif Parkir</span>
+              <span class="text-[10.5px] text-[#94A3B8]">Acuan harga per jam</span>
             </div>
 
-            <div class="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4 ">
+            <div class="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <button
                 v-for="kat in kategoriTarifList"
                 :key="kat.id"
                 type="button"
-                @click="selectedJenis = kat.jenis"
+                @click="selectedTarifJenis = kat.jenis"
                 :class="[
                   'flex cursor-pointer flex-col items-start justify-between rounded-2xl border p-3.5 text-left transition-all',
-                  selectedJenis === kat.jenis
+                  selectedTarifJenis === kat.jenis
                     ? 'border-olive bg-olive text-white shadow-xs'
                     : 'border-[#E2E8F0] bg-[#FAFBF9] text-[#0F172A] hover:border-olive/50 hover:bg-[#F4F8EA]',
                 ]"
@@ -532,17 +579,17 @@ onBeforeUnmount(() => {
                   <component
                     :is="kat.icon"
                     :size="16"
-                    :class="selectedJenis === kat.jenis ? 'text-[#EAF6C9]' : 'text-olive'"
+                    :class="selectedTarifJenis === kat.jenis ? 'text-[#EAF6C9]' : 'text-olive'"
                   />
                   <span
                     :class="[
                       'rounded-full px-2 py-0.5 text-[9px] font-bold',
-                      selectedJenis === kat.jenis
+                      selectedTarifJenis === kat.jenis
                         ? 'bg-white/20 text-white'
                         : 'bg-[#EEF2F6] text-[#475569]',
                     ]"
                   >
-                    {{ selectedJenis === kat.jenis ? 'Aktif' : kat.subLabel }}
+                    {{ selectedTarifJenis === kat.jenis ? 'Aktif' : kat.subLabel }}
                   </span>
                 </div>
 
@@ -551,7 +598,7 @@ onBeforeUnmount(() => {
                   <p
                     :class="[
                       'mt-0.5 text-[10.5px] font-semibold',
-                      selectedJenis === kat.jenis ? 'text-[#EAF6C9]' : 'text-[#64748B]',
+                      selectedTarifJenis === kat.jenis ? 'text-[#EAF6C9]' : 'text-[#64748B]',
                     ]"
                   >
                     {{ formatRupiah(kat.tarifPerJam) }}/jam
@@ -561,10 +608,54 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <!-- 3. Detail Jenis Kendaraan (Input Bebas + Preset Cepat) -->
+          <div>
+            <div class="flex items-center justify-between text-xs">
+              <label for="detail_jenis_kendaraan" class="font-bold text-[#0F172A]">
+                Jenis Kendaraan <span class="font-normal text-[#94A3B8]">(Detail Tipe / Model)</span>
+              </label>
+              <button
+                v-if="detailJenisKendaraan"
+                type="button"
+                @click="detailJenisKendaraan = ''"
+                class="cursor-pointer text-[10.5px] font-bold text-[#64748B] hover:text-[#0F172A]"
+              >
+                Bersihkan
+              </button>
+            </div>
+
+            <input
+              id="detail_jenis_kendaraan"
+              v-model="detailJenisKendaraan"
+              type="text"
+              placeholder="Contoh: SUV, MPV, City Car, Motor Matic..."
+              autocomplete="off"
+              class="mt-2 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2.5 text-xs font-semibold text-[#0F172A] placeholder:font-normal placeholder:text-[#94A3B8] focus:border-olive focus:bg-white focus:outline-none"
+            />
+
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              <button
+                v-for="preset in detailPresetsForActiveTarif"
+                :key="preset"
+                type="button"
+                @click="detailJenisKendaraan = preset"
+                :class="[
+                  'cursor-pointer rounded-full border px-2.5 py-1 text-[10.5px] font-bold transition-colors',
+                  detailJenisKendaraan.toLowerCase() === preset.toLowerCase()
+                    ? 'border-olive bg-[#EAF6C9] text-[#3E4E14]'
+                    : 'border-[#E2E8F0] bg-white text-[#475569] hover:border-olive/50 hover:bg-[#FAFBF9]',
+                ]"
+              >
+                {{ preset }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 4. Area Parkir -->
           <div>
             <div class="flex items-center justify-between text-xs">
               <label for="id_area" class="font-bold text-[#0F172A]">
-                Rekomendasi Area Parkir
+                Area Parkir
               </label>
               <span class="text-[10.5px] font-bold text-olive">
                 • {{ totalSlotKosongSemua }} Slot Kosong Tersedia
@@ -574,7 +665,7 @@ onBeforeUnmount(() => {
             <select
               id="id_area"
               v-model="selectedAreaId"
-              class="mt-2 w-full cursor-pointer rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-xs font-semibold text-[#0F172A] focus:border-olive focus:bg-white focus:outline-none"
+              class="mt-2.5 w-full cursor-pointer rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-5 pr-10 py-3 text-xs font-semibold text-[#0F172A] focus:border-olive focus:bg-white focus:outline-none"
             >
               <option value="" disabled>Pilih area parkir</option>
               <option
@@ -590,31 +681,43 @@ onBeforeUnmount(() => {
             </select>
           </div>
 
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label for="warna_kendaraan" class="block text-xs font-bold text-[#0F172A]">
-                Warna Kendaraan <span class="font-normal text-[#94A3B8]">(Opsional)</span>
-              </label>
-              <input
-                id="warna_kendaraan"
-                v-model="warnaKendaraan"
-                type="text"
-                placeholder="Kosongkan jika tidak perlu"
-                class="mt-2 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-olive focus:bg-white focus:outline-none"
-              />
-            </div>
+          <!-- 5. Field Opsional (Di-collapse agar proses utama cepat) -->
+          <div class="rounded-2xl border border-slate-100 bg-[#FAFBF9] p-3.5">
+            <button
+              type="button"
+              @click="showOptionalFields = !showOptionalFields"
+              class="flex w-full cursor-pointer items-center justify-between text-xs font-bold text-[#475569] hover:text-[#0F172A]"
+            >
+              <span>Data Opsional: Warna &amp; Pengemudi (Lewati jika antrean padat)</span>
+              <component :is="showOptionalFields ? ChevronUp : ChevronDown" :size="15" />
+            </button>
 
-            <div>
-              <label for="nama_pengemudi" class="block text-xs font-bold text-[#0F172A]">
-                Nama Pengemudi / Tamu <span class="font-normal text-[#94A3B8]">(Opsional)</span>
-              </label>
-              <input
-                id="nama_pengemudi"
-                v-model="namaPengemudi"
-                type="text"
-                placeholder="Kosongkan jika tidak perlu"
-                class="mt-2 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-olive focus:bg-white focus:outline-none"
-              />
+            <div v-if="showOptionalFields" class="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label for="warna_kendaraan" class="block text-[11px] font-bold text-[#334155]">
+                  Warna Kendaraan
+                </label>
+                <input
+                  id="warna_kendaraan"
+                  v-model="warnaKendaraan"
+                  type="text"
+                  placeholder="Hitam, Putih, Silver..."
+                  class="mt-1.5 w-full rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-olive focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label for="nama_pengemudi" class="block text-[11px] font-bold text-[#334155]">
+                  Nama Pengemudi / Tamu
+                </label>
+                <input
+                  id="nama_pengemudi"
+                  v-model="namaPengemudi"
+                  type="text"
+                  placeholder="Kosongkan jika tidak perlu"
+                  class="mt-1.5 w-full rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-olive focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -637,7 +740,7 @@ onBeforeUnmount(() => {
       <div class="space-y-6">
         <section class="rounded-[24px] border border-[#E2E8F0] bg-white p-6 shadow-2xs">
           <div class="no-print flex items-center justify-between border-b border-dashed border-[#CBD5E1] pb-3 text-[10.5px]">
-            <span class="font-bold tracking-wider text-[#475569]"> PREVIEW KARCIS (56×46mm)</span>
+            <span class="font-bold tracking-wider text-[#475569]">PREVIEW KARCIS (56×46mm)</span>
             <span class="font-mono text-[#94A3B8]">Thermal 56×46mm</span>
           </div>
 

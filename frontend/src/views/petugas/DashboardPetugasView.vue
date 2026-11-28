@@ -59,7 +59,7 @@ const petugasInitials = computed(
 
 const operatorBadgeCode = computed(() => {
   const idNum = Number(authUser.value?.id_user ?? authUser.value?.id ?? 1) || 1
-  return `PRK-${String(idNum).padStart(4, '0')}`
+  return `USER-${String(idNum).padStart(4, '0')}`
 })
 
 const formatRupiah = (amount) =>
@@ -385,7 +385,7 @@ const recentActiveVehicles = computed(() =>
           class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2 text-[11px] font-bold text-[#334155] transition-colors hover:border-olive hover:bg-[#F4F8EA] hover:text-olive disabled:opacity-60"
         >
           <RefreshCw :size="13" :class="isLoading ? 'animate-spin' : ''" />
-          <span>{{ isLoading ? 'Menyinkronkan...' : 'Sinkron Data' }}</span>
+          <span>{{ isLoading ? 'Menyinkronkan...' : 'Sync' }}</span>
         </button>
       </div>
     </motion.div>

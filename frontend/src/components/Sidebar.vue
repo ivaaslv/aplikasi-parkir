@@ -67,7 +67,7 @@ const menuGroups = [
     allowedRoles: ['petugas'],
     items: [
       { id: 'dashboard-petugas', label: 'Dashboard Petugas', to: '/petugas/dashboard', icon: ClipboardList },
-      { id: 'area-parkir-petugas', label: 'Area Parkir Petugas', to: '/petugas/area-parkir', icon: SquareParking },
+      { id: 'area-parkir-petugas', label: 'Area Parkir', to: '/petugas/area-parkir', icon: SquareParking },
       { id: 'parkir-masuk', label: 'Parkir Masuk', to: '/petugas/parkir-masuk', icon: LogIn },
       { id: 'parkir-keluar', label: 'Parkir Keluar & Scan', to: '/petugas/parkir-keluar', icon: QrCode },
       { id: 'daftar-transaksi', label: 'Daftar Transaksi', to: '/petugas/transaksi', icon: ReceiptText },

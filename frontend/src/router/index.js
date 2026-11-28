@@ -98,6 +98,12 @@ const routes = [
     component: () => import('../views/petugas/ParkirKeluarView.vue'),
     meta: { requiresAuth: true, role: 'petugas', title: 'Parkir Keluar — ParkFlow' },
   },
+  {
+    path: '/petugas/transaksi',
+    name: 'petugas-daftar-transaksi',
+    component: () => import('../views/petugas/TransaksiView.vue'),
+    meta: { requiresAuth: true, role: 'petugas', title: 'Transaksi — ParkFlow' },
+  },
   // {
   //   path: '/owner/dashboard',
   //   name: 'owner-dashboard',

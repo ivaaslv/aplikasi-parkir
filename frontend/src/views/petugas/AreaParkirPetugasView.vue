@@ -5,8 +5,6 @@ import {
   Search,
   RefreshCw,
   Clock,
-  CheckCircle2,
-  AlertTriangle,
   LogIn,
   QrCode,
 } from 'lucide-vue-next'
@@ -25,6 +23,7 @@ const authUser = ref(authState.user)
 const activeMenu = ref('area-parkir-petugas')
 
 const isLoading = ref(false)
+const isMountedAnim = ref(false)
 const fetchError = ref('')
 const lastSyncLabel = ref('Baru saja')
 
@@ -120,6 +119,10 @@ const handleLogout = async () => {
 }
 
 onMounted(async () => {
+  requestAnimationFrame(() => {
+    isMountedAnim.value = true
+  })
+
   if (authState.token) {
     try {
       const { data } = await api.get('/auth/me')
@@ -270,7 +273,7 @@ const totalKosongSemua = computed(() =>
       class="flex flex-col justify-between gap-4 rounded-[24px] border border-[#E2E8F0] bg-white px-6 py-4 shadow-2xs sm:flex-row sm:items-center will-change-transform"
     >
       <div class="flex items-center gap-3.5">
-        <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EAF6C9] text-olive">
+        <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EAF6C9] text-olive transition-transform duration-300 hover:scale-105">
           <SquareParking :size="20" />
         </span>
         <div>
@@ -291,15 +294,15 @@ const totalKosongSemua = computed(() =>
           type="button"
           @click="fetchAreaMonitoringData"
           :disabled="isLoading"
-          class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2 text-[11px] font-bold text-[#334155] transition-colors hover:border-olive hover:bg-[#F4F8EA] hover:text-olive disabled:opacity-60"
+          class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2 text-[11px] font-bold text-[#334155] transition-all duration-200 hover:border-olive hover:bg-[#F4F8EA] hover:text-olive active:scale-95 disabled:opacity-60"
         >
-          <RefreshCw :size="13" :class="isLoading ? 'animate-spin' : ''" />
-          <span>{{ isLoading ? 'Memuat...' : 'Sinkronkan' }}</span>
+          <RefreshCw :size="13" :class="isLoading ? 'animate-spin text-olive' : ''" />
+          <span>{{ isLoading ? 'Memuat...' : 'Sync' }}</span>
         </button>
         <button
           type="button"
           @click="router.push('/petugas/parkir-masuk')"
-          class="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-olive px-4 py-2 text-[11px] font-bold text-white transition-colors hover:bg-olive-dark"
+          class="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-olive px-4 py-2 text-[11px] font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-olive-dark active:translate-y-0 active:scale-95"
         >
           <LogIn :size="13" />
           <span>Parkir Masuk</span>
@@ -307,16 +310,23 @@ const totalKosongSemua = computed(() =>
       </div>
     </motion.div>
 
-    <p
-      v-if="fetchError"
-      class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700"
-    >
-      {{ fetchError }}
-    </p>
+    <Transition name="soft-expand">
+      <p
+        v-if="fetchError"
+        class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700"
+      >
+        {{ fetchError }}
+      </p>
+    </Transition>
 
     <!-- 3 Kartu Ringkasan Slot -->
-    <div class="mt-6 grid gap-5 sm:grid-cols-3">
-      <div class="rounded-[22px] border border-[#E2E8F0] bg-white p-5 shadow-2xs">
+    <div
+      :class="[
+        'mt-6 grid gap-5 sm:grid-cols-3 transition-all duration-500 delay-75 ease-out',
+        isMountedAnim ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0',
+      ]"
+    >
+      <div class="rounded-[22px] border border-[#E2E8F0] bg-white p-5 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
         <p class="text-[9.5px] font-bold tracking-wider text-[#94A3B8]">TOTAL AREA TERDAFTAR</p>
         <p class="mt-2.5 text-2xl font-extrabold text-[#0F172A]">
           {{ formatAngka(enrichedAreas.length) }}
@@ -327,7 +337,7 @@ const totalKosongSemua = computed(() =>
         </p>
       </div>
 
-      <div class="rounded-[22px] border border-[#E2E8F0] bg-white p-5 shadow-2xs">
+      <div class="rounded-[22px] border border-[#E2E8F0] bg-white p-5 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
         <p class="text-[9.5px] font-bold tracking-wider text-[#94A3B8]">KENDARAAN SEDANG PARKIR</p>
         <p class="mt-2.5 text-2xl font-extrabold text-olive">
           {{ formatAngka(totalTerparkirSemua) }}
@@ -338,7 +348,7 @@ const totalKosongSemua = computed(() =>
         </p>
       </div>
 
-      <div class="rounded-[22px] border border-[#E2E8F0] bg-white p-5 shadow-2xs">
+      <div class="rounded-[22px] border border-[#E2E8F0] bg-white p-5 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
         <p class="text-[9.5px] font-bold tracking-wider text-[#94A3B8]">TOTAL SLOT TERSEDIA</p>
         <p class="mt-2.5 text-2xl font-extrabold text-[#0F172A]">
           {{ formatAngka(totalKosongSemua) }}
@@ -351,11 +361,16 @@ const totalKosongSemua = computed(() =>
     </div>
 
     <!-- Filter Area, Jenis Kendaraan & Pencarian Plat -->
-    <div class="mt-6 flex flex-col justify-between gap-3 rounded-[22px] border border-[#E2E8F0] bg-white p-4 shadow-2xs lg:flex-row lg:items-center">
+    <div
+      :class="[
+        'mt-6 flex flex-col justify-between gap-3 rounded-[22px] border border-[#E2E8F0] bg-white p-4 shadow-2xs lg:flex-row lg:items-center transition-all duration-500 delay-100 ease-out',
+        isMountedAnim ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0',
+      ]"
+    >
       <div class="flex flex-wrap items-center gap-2">
         <select
           v-model="selectedAreaId"
-          class="cursor-pointer rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2 text-xs font-semibold text-[#334155] focus:border-olive focus:outline-none"
+          class="cursor-pointer rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2 text-xs font-semibold text-[#334155] transition-all duration-200 focus:border-olive focus:outline-none"
         >
           <option value="all">Semua Area ({{ enrichedAreas.length }})</option>
           <option v-for="area in enrichedAreas" :key="area.id" :value="area.id">
@@ -374,9 +389,9 @@ const totalKosongSemua = computed(() =>
             type="button"
             @click="vehicleFilter = jenis.id"
             :class="[
-              'cursor-pointer rounded-full px-3 py-1 font-bold transition-colors',
+              'cursor-pointer rounded-full px-3 py-1 font-bold transition-all duration-200 active:scale-95',
               vehicleFilter === jenis.id
-                ? 'bg-olive text-white'
+                ? 'bg-olive text-white shadow-2xs'
                 : 'text-[#64748B] hover:text-olive',
             ]"
           >
@@ -391,19 +406,27 @@ const totalKosongSemua = computed(() =>
           v-model="searchQuery"
           type="text"
           placeholder="Cari plat nomor / pemilik / area..."
-          class="w-full rounded-full border border-[#E2E8F0] bg-[#F8FAFC] py-2 pl-9 pr-4 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-olive focus:bg-white focus:outline-none"
+          class="w-full rounded-full border border-[#E2E8F0] bg-[#F8FAFC] py-2 pl-9 pr-4 text-xs text-[#0F172A] placeholder:text-[#94A3B8] transition-all duration-200 focus:border-olive focus:bg-white focus:outline-none"
         />
       </div>
     </div>
 
     <!-- Grid Kartu Semua Area Parkir -->
-    <div v-if="filteredAreas.length > 0" class="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+    <TransitionGroup
+      v-if="filteredAreas.length > 0"
+      name="card-pop"
+      tag="div"
+      :class="[
+        'mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3 transition-all duration-500 delay-150 ease-out',
+        isMountedAnim ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0',
+      ]"
+    >
       <div
         v-for="area in filteredAreas"
         :key="area.id"
         @click="selectedAreaId = String(selectedAreaId) === String(area.id) ? 'all' : area.id"
         :class="[
-          'cursor-pointer rounded-[24px] border bg-white p-5 shadow-2xs transition-all',
+          'cursor-pointer rounded-[24px] border bg-white p-5 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]',
           String(selectedAreaId) === String(area.id)
             ? 'border-olive ring-2 ring-olive/15'
             : 'border-[#E2E8F0] hover:border-olive/40',
@@ -416,7 +439,7 @@ const totalKosongSemua = computed(() =>
               {{ area.deskripsi || `Tipe: ${area.jenisKendaraan.toUpperCase()}` }}
             </p>
           </div>
-          <span :class="['rounded-full px-2.5 py-0.5 text-[9.5px] font-bold', area.statusCls]">
+          <span :class="['rounded-full px-2.5 py-0.5 text-[9.5px] font-bold transition-colors', area.statusCls]">
             {{ area.statusLabel }}
           </span>
         </div>
@@ -433,7 +456,7 @@ const totalKosongSemua = computed(() =>
 
         <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#F1F5F9]">
           <div
-            :class="['h-full rounded-full transition-all duration-500', area.barCls]"
+            :class="['h-full rounded-full transition-all duration-500 ease-out', area.barCls]"
             :style="{ width: `${area.percent}%` }"
           />
         </div>
@@ -448,7 +471,7 @@ const totalKosongSemua = computed(() =>
           </span>
         </div>
       </div>
-    </div>
+    </TransitionGroup>
 
     <div
       v-else
@@ -458,7 +481,12 @@ const totalKosongSemua = computed(() =>
     </div>
 
     <!-- Daftar Kendaraan Yang Sedang Parkir di Area -->
-    <section class="mt-7 rounded-[24px] border border-[#E2E8F0] bg-white p-6 shadow-2xs">
+    <section
+      :class="[
+        'mt-7 rounded-[24px] border border-[#E2E8F0] bg-white p-6 shadow-2xs transition-all duration-500 delay-200 ease-out',
+        isMountedAnim ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0',
+      ]"
+    >
       <div class="flex flex-col justify-between gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
         <div>
           <h2 class="text-sm font-extrabold text-[#0F172A]">
@@ -472,7 +500,7 @@ const totalKosongSemua = computed(() =>
         <button
           type="button"
           @click="router.push('/petugas/parkir-keluar')"
-          class="inline-flex cursor-pointer items-center gap-1.5 self-start rounded-full bg-[#0F172A] px-4 py-2 text-[11px] font-bold text-white transition-colors hover:bg-[#1E293B] sm:self-auto"
+          class="inline-flex cursor-pointer items-center gap-1.5 self-start rounded-full bg-[#0F172A] px-4 py-2 text-[11px] font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#1E293B] active:translate-y-0 active:scale-95 sm:self-auto"
         >
           <QrCode :size="13" />
           <span>Proses Kendaraan Keluar</span>
@@ -490,11 +518,11 @@ const totalKosongSemua = computed(() =>
               <th class="py-3 text-right">DURASI BERJALAN</th>
             </tr>
           </thead>
-          <tbody v-if="filteredVehicles.length > 0" class="divide-y divide-slate-100 text-xs">
+          <TransitionGroup v-if="filteredVehicles.length > 0" name="row-fade" tag="tbody" class="divide-y divide-slate-100 text-xs">
             <tr
               v-for="v in filteredVehicles"
               :key="v.id"
-              class="transition-colors hover:bg-[#F8FAFC]/80"
+              class="transition-colors duration-200 hover:bg-[#F8FAFC]/80"
             >
               <td class="py-3.5 pr-4 align-middle">
                 <span class="inline-block rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1 font-mono text-[11px] font-extrabold text-[#0F172A]">
@@ -524,7 +552,7 @@ const totalKosongSemua = computed(() =>
                 </span>
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
           <tbody v-else>
             <tr>
               <td colspan="5" class="py-9 text-center text-xs text-[#64748B]">
@@ -551,5 +579,41 @@ const totalKosongSemua = computed(() =>
 }
 .bg-olive-dark {
   background-color: #161F00;
+}
+
+.soft-expand-enter-active,
+.soft-expand-leave-active {
+  transition: all 0.22s ease;
+}
+.soft-expand-enter-from,
+.soft-expand-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.card-pop-enter-active,
+.card-pop-leave-active {
+  transition: all 0.25s ease;
+}
+.card-pop-enter-from,
+.card-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.98) translateY(6px);
+}
+.card-pop-move {
+  transition: transform 0.25s ease;
+}
+
+.row-fade-enter-active,
+.row-fade-leave-active {
+  transition: all 0.25s ease;
+}
+.row-fade-enter-from,
+.row-fade-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.row-fade-move {
+  transition: transform 0.25s ease;
 }
 </style>
